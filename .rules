@@ -1,0 +1,18 @@
+# AI Instructions for this project
+
+## File Edits
+- Never rewrite an entire file when editing it, only change relevant parts, unless necessary.
+- never create README files, unless explicitly asked to.
+- Don't try to build or run the project, unless specified to.
+- Don't be verbose when explaining changes made, and avoid explaining unless necessary.
+- Never generate assets like SVGs unless specified to.
+- Prefer to use shadcn components.
+- Prefer using absolute path with aliases unless file is in the same directory.
+- when editing, don't try to fix formatting manually. 
+
+## Components
+- Use the DataTable component for all tables - any extra features added to DataTable must not break existing implementations unless specifically requested.
+- Use the modal component for all modals.
+
+## Styling
+- prefer using Tailwind data- attributes over conditional classes.
