@@ -1,8 +1,5 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
-import * as React from "react";
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,8 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 import { cn } from "@/lib/utils";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import * as React from "react";
 
 export interface ModalAction {
   label: string;
