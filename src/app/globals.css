@@ -155,4 +155,12 @@
   .stat-pill {
     @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium;
   }
+  input[type="range"]::-webkit-slider-thumb {
+    @apply h-4 w-4 cursor-pointer appearance-none rounded-full border-2 border-white shadow-sm;
+    background: oklch(0.52 0.14 250);
+  }
+  input[type="range"]::-moz-range-thumb {
+    @apply h-4 w-4 cursor-pointer rounded-full border-2 border-white shadow-sm;
+    background: oklch(0.52 0.14 250);
+  }
 }

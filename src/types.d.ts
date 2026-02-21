@@ -1,3 +1,49 @@
+export type SessionMode = "online" | "presential";
+export type SessionType = "individual" | "group";
+export type SessionStatus = "scheduled" | "completed" | "cancelled";
+
+export interface SessionStudent {
+  id: string;
+  name: string;
+}
+
+export interface ScheduleSession {
+  id: string;
+  tutorId: string;
+  subjectId: string;
+  title: string;
+  day: number; // 0=Sun … 6=Sat
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+  mode: SessionMode;
+  type: SessionType;
+  status: SessionStatus;
+  students: SessionStudent[];
+  location?: string; // for presential
+  meetingUrl?: string; // for online
+  recurringWeekly: boolean;
+  date?: string; // ISO date string for one-off sessions
+  pricePerStudent?: number; // price charged per student per session
+}
+
+/** Availability slot — a block when the tutor is free */
+export interface AvailabilitySlot {
+  day: number; // 0=Sun … 6=Sat
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+}
+
+export interface TutorSchedule {
+  tutorId: string;
+  sessions: ScheduleSession[];
+  availability: AvailabilitySlot[];
+}
+
+export interface SettingsState {
+  platformCut: number;
+  setPlatformCut: (value: number) => void;
+}
+
 export type TutorStatus = "active" | "inactive" | "pending";
 
 export type TutorResourceType =
@@ -44,9 +90,40 @@ export interface SubjectRevenue {
   standaloneLessons: LessonRevenue[];
 }
 
+export interface RecurringSessionRevenue {
+  sessionId: string;
+  title: string;
+  type: SessionType;
+  mode: SessionMode;
+  subjectId: string;
+  studentCount: number;
+  pricePerStudent: number;
+  sessionsThisMonth: number;
+  amount: number; // total gross this month
+}
+
 export interface TutorRevenue {
   total: number;
   bySubject: SubjectRevenue[];
+  recurringSessions?: RecurringSessionRevenue[];
+}
+
+export interface SessionPricingTier {
+  pricePerStudent: number;
+  accepted: boolean;
+}
+
+export interface TutorSessionPricing {
+  individual?: {
+    online?: SessionPricingTier;
+    presential?: SessionPricingTier;
+  };
+  group?: {
+    online?: SessionPricingTier;
+    presential?: SessionPricingTier;
+    maxStudents?: number;
+  };
+  notes?: string;
 }
 
 export interface Subject {
@@ -109,8 +186,10 @@ export interface Tutor {
     students: number;
   }[];
   monthlyEarnings: number;
+  sessionPricing?: TutorSessionPricing;
   revenue?: TutorRevenue;
   resources?: TutorResource[];
+  schedule?: TutorSchedule;
 }
 
 export type ParentStatus = "active" | "inactive" | "suspended";

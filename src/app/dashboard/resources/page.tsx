@@ -220,10 +220,10 @@ const columns: ColumnDef<Resource>[] = [
             <TypeIcon className="h-4 w-4" style={{ color: typeStyle.color }} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate max-w-[220px]">
+            <p className="text-sm font-medium text-foreground truncate max-w-55">
               {resource.title}
             </p>
-            <p className="text-[11px] text-muted-foreground truncate max-w-[220px]">
+            <p className="text-[11px] text-muted-foreground truncate max-w-55">
               {resource.description}
             </p>
           </div>

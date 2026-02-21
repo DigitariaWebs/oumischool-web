@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BookOpen, Eye, EyeOff, GraduationCap, Loader2 } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 
 export default function LoginPage() {
@@ -29,15 +30,15 @@ export default function LoginPage() {
       >
         {/* Decorative circles */}
         <div
-          className="absolute top-[-80px] right-[-80px] w-[380px] h-[380px] rounded-full opacity-10"
+          className="absolute -top-20 -right-20 w-95 h-95 rounded-full opacity-10"
           style={{ background: "oklch(0.58 0.16 155)" }}
         />
         <div
-          className="absolute bottom-[-60px] left-[-60px] w-[280px] h-[280px] rounded-full opacity-8"
+          className="absolute -bottom-15 -left-15 w-70 h-70 rounded-full opacity-8"
           style={{ background: "oklch(0.58 0.16 155)" }}
         />
         <div
-          className="absolute top-[40%] right-[-40px] w-[160px] h-[160px] rounded-full opacity-6"
+          className="absolute top-[40%] -right-10 w-40 h-40 rounded-full opacity-6"
           style={{ background: "oklch(0.72 0.14 80)" }}
         />
 
@@ -53,15 +54,13 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "oklch(0.58 0.16 155)" }}
-          >
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-white font-semibold text-lg tracking-tight">
-            OumiSchool
-          </span>
+          <Image
+            src="/logo.png"
+            alt="OumiSchool"
+            width={140}
+            height={40}
+            className="h-10 w-auto"
+          />
         </div>
 
         {/* Center content */}
@@ -154,18 +153,16 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2.5 mb-10">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "oklch(0.58 0.16 155)" }}
-          >
-            <GraduationCap className="w-4.5 h-4.5 text-white" />
-          </div>
-          <span className="font-semibold text-base tracking-tight">
-            OumiSchool
-          </span>
+          <Image
+            src="/logo.png"
+            alt="OumiSchool"
+            width={120}
+            height={32}
+            className="h-8 w-auto"
+          />
         </div>
 
-        <div className="w-full max-w-[380px]">
+        <div className="w-full max-w-95">
           {/* Header */}
           <div className="mb-8">
             <div
