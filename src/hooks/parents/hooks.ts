@@ -58,3 +58,11 @@ export function useCreateParent() {
     },
   });
 }
+
+export function useParentOrders(parentId: string) {
+  return useQuery({
+    queryKey: [...parentKeys.detail(parentId), "orders"],
+    queryFn: () => parentsApi.listOrders(parentId),
+    enabled: !!parentId,
+  });
+}

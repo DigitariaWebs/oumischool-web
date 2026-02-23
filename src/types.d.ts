@@ -264,6 +264,8 @@ export interface Resource {
   uploadedDate: string;
   fileSize: string;
   tags: string[];
+  isPaid?: boolean;
+  price?: number | null; // in cents
 }
 
 export interface StatusStyle {

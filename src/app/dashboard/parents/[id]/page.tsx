@@ -7,6 +7,7 @@ import {
   useActivateParent,
   useDeactivateParent,
   useParentDetail,
+  useParentOrders,
   useSuspendParent,
 } from "@/hooks/parents";
 import type { AdminParent } from "@/hooks/parents/api";
@@ -175,6 +176,7 @@ export default function ParentDetailPage({
   const { id } = use(params);
   const { data: parentData, isLoading } = useParentDetail(id);
   const { data: studentsData = [] } = useStudents();
+  const { data: ordersData = [] } = useParentOrders(id);
   const activateParent = useActivateParent();
   const deactivateParent = useDeactivateParent();
   const suspendParent = useSuspendParent();
@@ -590,53 +592,85 @@ export default function ParentDetailPage({
                   Paiements
                 </h2>
                 <div className="space-y-3">
-                  {[
-                    {
-                      label: "Statut actuel",
-                      value: (
-                        <PaymentStatusBadge
-                          status={currentParent.paymentStatus}
-                        />
-                      ),
-                    },
-                    {
-                      label: "Dernier paiement",
-                      value: currentParent.lastPaymentDate ?? "—",
-                    },
-                    {
-                      label: "Prochain paiement",
-                      value: currentParent.nextPaymentDate ?? "—",
-                    },
-                    {
-                      label: "Frais mensuels",
-                      value: currentParent.monthlyFee
-                        ? formatCurrency(currentParent.monthlyFee)
-                        : "—",
-                    },
-                    {
-                      label: "Total versé",
-                      value: currentParent.totalPayments
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">
+                      Statut actuel
+                    </span>
+                    <PaymentStatusBadge status={currentParent.paymentStatus} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">
+                      Total versé
+                    </span>
+                    <span className="text-xs font-medium text-foreground">
+                      {currentParent.totalPayments
                         ? formatCurrency(currentParent.totalPayments)
-                        : "—",
-                    },
-                  ].map(({ label, value }, index) => (
-                    <div
-                      key={`${label}-${index}`}
-                      className="flex items-center justify-between gap-4"
-                    >
-                      <span className="text-xs text-muted-foreground">
-                        {label}
-                      </span>
-                      {typeof value === "string" ? (
-                        <span className="text-xs font-medium text-foreground text-right">
-                          {value}
-                        </span>
-                      ) : (
-                        value
-                      )}
-                    </div>
-                  ))}
+                        : "—"}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Real orders from Stripe */}
+                {ordersData.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                      Historique des commandes
+                    </p>
+                    {ordersData.slice(0, 5).map((order) => {
+                      const statusColors: Record<
+                        string,
+                        { bg: string; color: string }
+                      > = {
+                        PAID: {
+                          bg: "oklch(0.95 0.018 155)",
+                          color: "oklch(0.45 0.14 155)",
+                        },
+                        PENDING: {
+                          bg: "oklch(0.96 0.03 80)",
+                          color: "oklch(0.55 0.16 80)",
+                        },
+                        FAILED: {
+                          bg: "oklch(0.94 0.008 20)",
+                          color: "oklch(0.45 0.12 20)",
+                        },
+                        REFUNDED: {
+                          bg: "oklch(0.95 0.02 250)",
+                          color: "oklch(0.52 0.14 250)",
+                        },
+                        CANCELLED: {
+                          bg: "oklch(0.94 0.005 250)",
+                          color: "oklch(0.48 0.02 250)",
+                        },
+                      };
+                      const style =
+                        statusColors[order.status] ?? statusColors.PENDING;
+                      return (
+                        <div
+                          key={order.id}
+                          className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">
+                              {order.type} —{" "}
+                              {formatCurrency(order.amount / 100)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(order.createdAt).toLocaleDateString(
+                                "fr-FR",
+                              )}
+                            </p>
+                          </div>
+                          <span
+                            className="ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{ background: style.bg, color: style.color }}
+                          >
+                            {order.status}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Account info */}

@@ -40,6 +40,21 @@ export interface CreateAdminParentPayload {
   password?: string;
 }
 
+export interface AdminOrder {
+  id: string;
+  type: string; // RESOURCE | SESSION | SUBSCRIPTION
+  status: string; // PENDING | PAID | FAILED | REFUNDED | CANCELLED
+  amount: number; // in cents
+  currency: string;
+  createdAt: string;
+  items: Array<{
+    id: string;
+    description: string;
+    unitAmount: number;
+    quantity: number;
+  }>;
+}
+
 export const parentsApi = {
   list: async (params?: {
     page?: number;
@@ -63,4 +78,6 @@ export const parentsApi = {
     api.post<unknown>(`/admin/parents/${id}/deactivate`),
   create: (body: CreateAdminParentPayload) =>
     api.post<AdminParent>("/admin/parents", body),
+  listOrders: (parentId: string) =>
+    api.get<AdminOrder[]>(`/payments/orders?parentId=${parentId}`),
 };

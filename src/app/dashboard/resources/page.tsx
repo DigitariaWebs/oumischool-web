@@ -83,6 +83,8 @@ function adaptResource(resource: AdminResource): Resource {
     }),
     fileSize: resource.fileSize ?? "—",
     tags: resource.tags,
+    isPaid: resource.isPaid ?? false,
+    price: resource.price ?? null,
   };
 }
 
@@ -178,6 +180,25 @@ const columns: ColumnDef<Resource>[] = [
     label: "Status",
     sortable: true,
     render: (resource) => <StatusBadge status={resource.status} />,
+  },
+  {
+    key: "isPaid",
+    label: "Price",
+    sortable: false,
+    render: (resource) =>
+      resource.isPaid ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+          style={{
+            background: "oklch(0.95 0.025 155)",
+            color: "oklch(0.45 0.14 155)",
+          }}
+        >
+          {resource.price ? `$${(resource.price / 100).toFixed(2)}` : "Paid"}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">Free</span>
+      ),
   },
   {
     key: "actions",
@@ -326,6 +347,8 @@ const defaultFormState: {
   type: ResourceType;
   status: ResourceStatus;
   tags: string;
+  isPaid: boolean;
+  price: string; // string input, converted to cents on submit
 } = {
   title: "",
   description: "",
@@ -333,6 +356,8 @@ const defaultFormState: {
   type: "document",
   status: "draft",
   tags: "",
+  isPaid: false,
+  price: "",
 };
 
 export default function ResourcesPage() {
@@ -362,6 +387,15 @@ export default function ResourcesPage() {
     payload.append("status", form.status.toUpperCase());
     if (form.description) payload.append("description", form.description);
     if (form.tags) payload.append("tags", form.tags);
+    if (form.isPaid) {
+      payload.append("isPaid", "true");
+      if (form.price) {
+        payload.append(
+          "price",
+          String(Math.round(parseFloat(form.price) * 100)),
+        );
+      }
+    }
     payload.append("file", selectedFile);
 
     await createResourceUpload.mutateAsync(payload);
@@ -593,6 +627,36 @@ export default function ResourcesPage() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2.5">
+            <input
+              id="res-ispaid"
+              type="checkbox"
+              checked={form.isPaid}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, isPaid: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+            />
+            <Label htmlFor="res-ispaid" className="cursor-pointer mb-0">
+              Paid resource
+            </Label>
+          </div>
+          {form.isPaid && (
+            <div className="space-y-1.5">
+              <Label htmlFor="res-price">Price (CAD)</Label>
+              <Input
+                id="res-price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 9.99"
+                value={form.price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, price: e.target.value }))
+                }
+              />
+            </div>
+          )}
           {createResourceUpload.isError && (
             <p className="text-xs text-destructive">
               Impossible d&apos;uploader la ressource.

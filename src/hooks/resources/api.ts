@@ -12,6 +12,8 @@ export interface AdminResource {
   views: number;
   downloads: number;
   tags: string[];
+  isPaid: boolean;
+  price: number | null; // in cents
   uploader: {
     id: string;
     email: string;
