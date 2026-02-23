@@ -257,6 +257,7 @@ export interface Resource {
   type: ResourceType;
   subject: string;
   status: ResourceStatus;
+  fileUrl?: string | null;
   views: number;
   downloads: number;
   uploadedBy: string;

@@ -13,21 +13,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  getSubjectColor,
-  getSubjectName,
-  mockSubjects,
-  mockTutors,
-} from "@/lib/data/tutors";
+  useApproveTutor,
+  useCreateTutor,
+  usePendingTutors,
+  useRejectTutor,
+  useTutors,
+} from "@/hooks/tutors";
+import type { AdminTutor } from "@/hooks/tutors/api";
 import { Tutor, TutorStatus } from "@/types";
 import {
   BookOpen,
@@ -37,6 +32,7 @@ import {
   ExternalLink,
   Eye,
   GraduationCap,
+  Loader2,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -47,7 +43,75 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+// ─── Adapter ─────────────────────────────────────────────────────────────────
+
+function getSubjectColor(id?: string | null): string {
+  const key = String(id ?? "").toLowerCase();
+  if (key.includes("math")) return "oklch(0.52 0.14 250)";
+  if (key.includes("fr")) return "oklch(0.58 0.16 155)";
+  if (key.includes("science")) return "oklch(0.62 0.16 80)";
+  if (key.includes("english")) return "oklch(0.68 0.18 20)";
+  return "oklch(0.58 0.16 155)";
+}
+
+function getSubjectName(id?: string | null): string {
+  const value = String(id ?? "").trim();
+  if (!value) return "Matière";
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function adaptTutor(t: AdminTutor): Tutor {
+  const status: TutorStatus =
+    t.approvalStatus === "APPROVED"
+      ? "active"
+      : t.approvalStatus === "REJECTED"
+        ? "inactive"
+        : "pending";
+  const subjectIds = asStringArray(t.subjects);
+  const languages = asStringArray(t.languages);
+  const qualifications = asStringArray(t.qualifications);
+  const email = String(t.user?.email ?? "");
+  return {
+    id: t.id,
+    name: (email.split("@")[0] || "Tutor").replace(/[._]/g, " "),
+    email: email || "—",
+    phone: "—",
+    subjectIds,
+    status,
+    students: t.students,
+    rating: t.rating,
+    joinedDate: new Date(t.user.createdAt).toLocaleDateString("fr-FR", {
+      month: "short",
+      year: "numeric",
+    }),
+    experience: t.experience ?? "—",
+    bio: t.bio ?? "",
+    location: t.location ?? "—",
+    languages,
+    availability: "—",
+    classesThisMonth: t.classesThisMonth,
+    totalClasses: t.classesThisMonth,
+    completionRate: t.completionRate,
+    responseTime: t.responseTimeHours ? `en ${t.responseTimeHours}h` : "N/A",
+    qualifications,
+    recentStudents: [],
+    upcomingClasses: [],
+    monthlyEarnings: 0,
+  };
+}
 
 // ─── Quick-view modal content ────────────────────────────────────────────────
 
@@ -79,8 +143,8 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
             <StatusBadge status={tutor.status} />
           </div>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-            {tutor.subjectIds.map((sid) => (
-              <span key={sid} className="flex items-center gap-1">
+            {tutor.subjectIds.map((sid, index) => (
+              <span key={`${sid}-${index}`} className="flex items-center gap-1">
                 <BookOpen
                   className="h-3.5 w-3.5"
                   style={{ color: getSubjectColor(sid) }}
@@ -167,9 +231,9 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
               ? `Répond ${tutor.responseTime}`
               : "Temps de réponse N/D",
           },
-        ].map(({ icon: Icon, label }) => (
+        ].map(({ icon: Icon, label }, index) => (
           <div
-            key={label}
+            key={`${label}-${index}`}
             className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
           >
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -185,8 +249,11 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
             Diplômes
           </p>
           <ul className="space-y-1.5">
-            {tutor.qualifications.map((q) => (
-              <li key={q} className="flex items-start gap-2 text-sm">
+            {tutor.qualifications.map((q, index) => (
+              <li
+                key={`${q}-${index}`}
+                className="flex items-start gap-2 text-sm"
+              >
                 <GraduationCap
                   className="mt-0.5 h-3.5 w-3.5 shrink-0"
                   style={{ color }}
@@ -205,11 +272,11 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
             Cours à venir
           </p>
           <div className="space-y-2">
-            {tutor.upcomingClasses.slice(0, 2).map((cls) => {
+            {tutor.upcomingClasses.slice(0, 2).map((cls, index) => {
               const clsColor = getSubjectColor(cls.subjectId);
               return (
                 <div
-                  key={cls.subjectId + cls.date}
+                  key={`${cls.subjectId}-${cls.date}-${cls.time}-${index}`}
                   className="flex items-center justify-between rounded-xl border border-border/50 px-3 py-2"
                   style={{ background: `${clsColor}08` }}
                 >
@@ -343,8 +410,8 @@ function buildColumns(
       sortable: false,
       render: (tutor) => (
         <div className="flex flex-wrap gap-1.5">
-          {tutor.subjectIds.map((sid) => (
-            <div key={sid} className="flex items-center gap-1">
+          {tutor.subjectIds.map((sid, index) => (
+            <div key={`${sid}-${index}`} className="flex items-center gap-1">
               <BookOpen
                 className="h-3.5 w-3.5"
                 style={{ color: getSubjectColor(sid) }}
@@ -487,8 +554,8 @@ function buildPendingColumns(
       sortable: false,
       render: (tutor) => (
         <div className="flex flex-wrap gap-1.5">
-          {tutor.subjectIds.map((sid) => (
-            <div key={sid} className="flex items-center gap-1">
+          {tutor.subjectIds.map((sid, index) => (
+            <div key={`${sid}-${index}`} className="flex items-center gap-1">
               <BookOpen
                 className="h-3.5 w-3.5"
                 style={{ color: getSubjectColor(sid) }}
@@ -562,96 +629,77 @@ function buildPendingColumns(
 // ─── Add form default ─────────────────────────────────────────────────────────
 
 const defaultFormState = {
-  name: "",
   email: "",
   phone: "",
-  subjectIds: [] as string[],
   experience: "",
-  status: "pending" as TutorStatus,
 };
-
-const filters = [
-  {
-    key: "subjectIds",
-    label: "Matière",
-    options: mockSubjects.map((s) => ({ label: s.name, value: s.id })),
-  },
-  {
-    key: "status",
-    label: "Statut",
-    options: [
-      { label: "Tous", value: "all" },
-      { label: "Actif", value: "active" },
-      { label: "Inactif", value: "inactive" },
-      { label: "En attente", value: "pending" },
-    ],
-  },
-];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TutorsPage() {
-  const [tutors, setTutors] = useState<Tutor[]>(mockTutors);
+  const router = useRouter();
+  const { data: allTutorsData = [], isLoading: loadingAll } = useTutors();
+  const { data: pendingTutorsData = [], isLoading: loadingPending } =
+    usePendingTutors();
+  const approveTutor = useApproveTutor();
+  const rejectTutor = useRejectTutor();
+  const createTutor = useCreateTutor();
+
   const [addOpen, setAddOpen] = useState(false);
   const [viewTutor, setViewTutor] = useState<Tutor | null>(null);
-  const [form, setForm] = useState<{
-    name: string;
-    email: string;
-    phone: string;
-    subjectIds: string[];
-    experience: string;
-    status: "active" | "inactive" | "pending";
-  }>(defaultFormState);
+  const [form, setForm] = useState(defaultFormState);
 
-  const activeTutors = tutors.filter((t) => t.status !== "pending");
-  const pendingTutors = tutors.filter((t) => t.status === "pending");
+  const activeTutors = allTutorsData
+    .filter((t) => t.approvalStatus !== "PENDING")
+    .map(adaptTutor);
+  const pendingTutors = pendingTutorsData.map(adaptTutor);
+  const subjectFilterOptions = Array.from(
+    new Set(
+      [...activeTutors, ...pendingTutors].flatMap((tutor) => tutor.subjectIds),
+    ),
+  ).map((id) => ({ label: getSubjectName(id), value: id }));
+  const filters = [
+    {
+      key: "subjectIds",
+      label: "Matière",
+      options: subjectFilterOptions,
+    },
+    {
+      key: "status",
+      label: "Statut",
+      options: [
+        { label: "Tous", value: "all" },
+        { label: "Actif", value: "active" },
+        { label: "Inactif", value: "inactive" },
+        { label: "En attente", value: "pending" },
+      ],
+    },
+  ];
 
-  const handleAdd = () => {
-    if (!form.name || !form.email || !form.subjectIds.length) return;
-    const newTutor: Tutor = {
-      id: `t${Date.now()}`,
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      subjectIds: form.subjectIds,
-      status: "pending",
-      students: 0,
-      rating: 0,
-      joinedDate: new Date().toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      experience: form.experience || "N/A",
-      bio: "",
-      location: "—",
-      languages: [],
-      availability: "—",
-      classesThisMonth: 0,
-      totalClasses: 0,
-      completionRate: 0,
-      responseTime: "N/A",
-      qualifications: [],
-      recentStudents: [],
-      upcomingClasses: [],
-      monthlyEarnings: 0,
-    };
-    setTutors((prev) => [newTutor, ...prev]);
-    setForm(defaultFormState);
-    setAddOpen(false);
+  const handleAdd = async () => {
+    if (!form.email) return;
+    try {
+      await createTutor.mutateAsync({
+        email: form.email,
+        phone: form.phone || undefined,
+        experience: form.experience || undefined,
+      });
+      setForm(defaultFormState);
+      setAddOpen(false);
+    } catch {
+      // error handled by mutation state
+    }
   };
 
-  const handleApprove = (tutor: Tutor) => {
-    setTutors((prev) =>
-      prev.map((t) => (t.id === tutor.id ? { ...t, status: "active" } : t)),
-    );
+  const handleApprove = async (tutor: Tutor) => {
+    await approveTutor.mutateAsync(tutor.id).catch(() => {});
   };
 
-  const handleReject = (tutor: Tutor) => {
-    setTutors((prev) => prev.filter((t) => t.id !== tutor.id));
+  const handleReject = async (tutor: Tutor) => {
+    await rejectTutor.mutateAsync(tutor.id).catch(() => {});
   };
 
   const allColumns = buildColumns(setViewTutor);
-  // filter by subjectIds array membership
   const pendingColumns = buildPendingColumns(
     setViewTutor,
     handleApprove,
@@ -728,18 +776,28 @@ export default function TutorsPage() {
           </div>
 
           <TabsContent value="all" className="p-6">
-            <DataTable
-              data={activeTutors}
-              columns={allColumns}
-              filters={filters}
-              searchKeys={["name", "email", "location"]}
-              itemsPerPage={8}
-              onRowClick={setViewTutor}
-            />
+            {loadingAll ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <DataTable
+                data={activeTutors}
+                columns={allColumns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewTutor}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="pending" className="p-6">
-            {pendingTutors.length === 0 ? (
+            {loadingPending ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : pendingTutors.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div
                   className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
@@ -811,7 +869,7 @@ export default function TutorsPage() {
             ? {
                 label: "Ouvrir le profil complet",
                 onClick: () => {
-                  window.location.href = `/dashboard/tutors/${viewTutor.id}`;
+                  router.push(`/dashboard/tutors/${viewTutor.id}`);
                 },
                 icon: <ExternalLink className="h-3.5 w-3.5" />,
               }
@@ -835,7 +893,10 @@ export default function TutorsPage() {
         description="Remplissez les détails pour inscrire un nouveau tuteur sur la plateforme."
         size="md"
         actions={{
-          primary: { label: "Ajouter tuteur", onClick: handleAdd },
+          primary: {
+            label: createTutor.isPending ? "Ajout en cours…" : "Ajouter tuteur",
+            onClick: handleAdd,
+          },
           secondary: {
             label: "Annuler",
             onClick: () => {
@@ -849,17 +910,6 @@ export default function TutorsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="tutor-name">Nom complet</Label>
-              <Input
-                id="tutor-name"
-                placeholder="ex. Aalvina Fatehi"
-                value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="tutor-email">E-mail</Label>
               <Input
                 id="tutor-email"
@@ -871,8 +921,6 @@ export default function TutorsPage() {
                 }
               />
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="tutor-phone">Téléphone</Label>
               <Input
@@ -884,65 +932,23 @@ export default function TutorsPage() {
                 }
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tutor-experience">Expérience</Label>
-              <Input
-                id="tutor-experience"
-                placeholder="ex. 3 ans"
-                value={form.experience}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, experience: e.target.value }))
-                }
-              />
-            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Matières</Label>
-              <div className="flex flex-col gap-1.5 rounded-lg border border-input bg-background p-2">
-                {mockSubjects.map((s) => (
-                  <label
-                    key={s.id}
-                    className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-muted/50"
-                  >
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={form.subjectIds.includes(s.id)}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          subjectIds: e.target.checked
-                            ? [...f.subjectIds, s.id]
-                            : f.subjectIds.filter((id) => id !== s.id),
-                        }))
-                      }
-                    />
-                    <BookOpen className="h-3 w-3" style={{ color: s.color }} />
-                    <span className="text-sm">{s.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Statut</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as Tutor["status"] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Actif</SelectItem>
-                  <SelectItem value="inactive">Inactif</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tutor-experience">Expérience</Label>
+            <Input
+              id="tutor-experience"
+              placeholder="ex. 3 ans"
+              value={form.experience}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, experience: e.target.value }))
+              }
+            />
           </div>
+          {createTutor.isError && (
+            <p className="text-xs text-destructive">
+              Erreur lors de l&apos;ajout du tuteur.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

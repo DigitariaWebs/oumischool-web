@@ -1,6 +1,9 @@
 "use client";
 
 import { InfoCard, InfoCardContainer } from "@/components/ui/info-card";
+import { useOverviewMetrics } from "@/hooks/overview";
+import { api } from "@/lib/api-client";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   GraduationCap,
@@ -15,6 +18,11 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
+
+interface SubjectOption {
+  id: string;
+  name: string;
+}
 
 const recentActivity = [
   {
@@ -167,6 +175,97 @@ const statusConfig = {
 };
 
 export default function DashboardPage() {
+  const { data: metrics } = useOverviewMetrics();
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => api.get<SubjectOption[]>("/subjects"),
+  });
+  const subjectNameById = new Map(
+    subjects.map((subject) => [subject.id, subject.name]),
+  );
+  const upcomingColors = [
+    "oklch(0.58 0.16 155)",
+    "oklch(0.72 0.14 80)",
+    "oklch(0.65 0.12 220)",
+    "oklch(0.68 0.18 20)",
+  ];
+
+  const secondaryMetrics = [
+    {
+      label: "Satisfaction moy.",
+      value:
+        metrics?.satisfactionRate != null
+          ? `${metrics.satisfactionRate.toFixed(0)}%`
+          : "96%",
+      trend: "+2%",
+      up: true,
+    },
+    {
+      label: "Cours aujourd\u2019hui",
+      value: metrics?.classesToday?.toString() ?? "24",
+      trend: "+4",
+      up: true,
+    },
+    {
+      label: "Approbations en attente",
+      value: metrics?.pendingApprovals?.toString() ?? "7",
+      trend: "-3",
+      up: false,
+    },
+    {
+      label: "Sessions actives",
+      value: metrics?.activeSessions?.toString() ?? "11",
+      trend: "+11",
+      up: true,
+    },
+  ];
+
+  const recentActivityItems = metrics?.recentActivity?.length
+    ? metrics.recentActivity.map((item, index) => ({
+        id: item.sessionId || `activity-${index}`,
+        action: `Session ${String(item.status ?? "").toLowerCase() || "mise à jour"}`,
+        name: `${item.tutorName} • ${item.childName}`,
+        subject: item.startTime
+          ? new Date(item.startTime).toLocaleString("fr-FR")
+          : "Mise à jour récente",
+        time: item.updatedAt
+          ? new Date(item.updatedAt).toLocaleTimeString("fr-FR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "—",
+        status:
+          String(item.status ?? "").toUpperCase() === "PENDING"
+            ? "pending"
+            : String(item.status ?? "").toUpperCase() === "CANCELLED"
+              ? "warning"
+              : "success",
+      }))
+    : recentActivity;
+
+  const upcomingClassItems = metrics?.upcomingClasses?.length
+    ? metrics.upcomingClasses.map((item, index) => ({
+        id: item.sessionId || `upcoming-${index}`,
+        subject: item.subjectId
+          ? (subjectNameById.get(item.subjectId) ?? "Cours planifié")
+          : "Cours planifié",
+        tutor: item.tutorName,
+        time: `${new Date(item.startTime).toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })} – ${new Date(item.endTime).toLocaleTimeString("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`,
+        date: new Date(item.startTime).toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "short",
+        }),
+        students: 1,
+        color: upcomingColors[index % upcomingColors.length],
+      }))
+    : upcomingClasses;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar */}
@@ -205,61 +304,40 @@ export default function DashboardPage() {
             <InfoCard
               icon={GraduationCap}
               title="Total des tuteurs"
-              value="184"
-              subtext="+6 ce mois"
+              value={metrics?.approvedTutors?.toString() ?? "—"}
+              subtext={`${metrics?.pendingApprovals ?? 0} en attente`}
               color="green"
             />
             <InfoCard
               icon={UsersRound}
-              title="Parents actifs"
-              value="872"
-              subtext="+23 ce mois"
+              title="Utilisateurs"
+              value={metrics?.users?.toString() ?? "—"}
+              subtext={`${metrics?.activeSubscriptions ?? 0} abonnements actifs`}
               color="blue"
             />
             <InfoCard
               icon={Users}
-              title="Étudiants inscrits"
-              value="2,418"
-              subtext="+112 ce mois"
+              title="Sessions totales"
+              value={metrics?.sessions?.toString() ?? "—"}
+              subtext={`${metrics?.activeSessions ?? 0} actives`}
               color="orange"
             />
             <InfoCard
               icon={BookOpen}
-              title="Ressources"
-              value="3,204"
-              subtext="+48 publiées"
+              title="Satisfaction"
+              value={
+                metrics?.satisfactionRate != null
+                  ? `${metrics.satisfactionRate.toFixed(0)}%`
+                  : "—"
+              }
+              subtext="Moyenne plateforme"
               color="purple"
             />
           </InfoCardContainer>
 
           {/* Secondary metrics row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              {
-                label: "Satisfaction moy.",
-                value: "96%",
-                trend: "+2%",
-                up: true,
-              },
-              {
-                label: "Cours aujourd&apos;hui",
-                value: "24",
-                trend: "+4",
-                up: true,
-              },
-              {
-                label: "Approbations en attente",
-                value: "7",
-                trend: "-3",
-                up: false,
-              },
-              {
-                label: "Sessions actives",
-                value: "11",
-                trend: "+11",
-                up: true,
-              },
-            ].map((m) => (
+            {secondaryMetrics.map((m) => (
               <div key={m.label} className="dash-card p-4">
                 <p className="text-xs text-muted-foreground">{m.label}</p>
                 <div className="flex items-end justify-between mt-1">
@@ -301,7 +379,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="divide-y divide-border/40">
-                {recentActivity.map((item) => {
+                {recentActivityItems.map((item) => {
                   const cfg =
                     statusConfig[item.status as keyof typeof statusConfig];
                   const StatusIcon = cfg.icon;
@@ -392,7 +470,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="p-3 space-y-2">
-                  {upcomingClasses.map((cls) => (
+                  {upcomingClassItems.map((cls) => (
                     <div
                       key={cls.id}
                       className="flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-muted/30"

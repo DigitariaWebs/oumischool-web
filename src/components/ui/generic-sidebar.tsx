@@ -205,7 +205,7 @@ export function GenericSidebar({
                     {section.items.map((item) => {
                       const isActive = pathname === item.url;
                       return (
-                        <SidebarMenuItem key={item.title}>
+                        <SidebarMenuItem key={`${item.url}-${item.title}`}>
                           {item.disabled ? (
                             <SidebarMenuButton
                               asChild={false}
@@ -293,7 +293,7 @@ export function GenericSidebar({
                         {section.items.map((item) => {
                           const isActive = pathname === item.url;
                           return (
-                            <SidebarMenuItem key={item.title}>
+                            <SidebarMenuItem key={`${item.url}-${item.title}`}>
                               {item.disabled ? (
                                 <SidebarMenuButton
                                   asChild={false}
@@ -376,7 +376,7 @@ export function GenericSidebar({
                     {section.items.map((item) => {
                       const isActive = pathname === item.url;
                       return (
-                        <SidebarMenuItem key={item.title}>
+                        <SidebarMenuItem key={`${item.url}-${item.title}`}>
                           {item.disabled ? (
                             <SidebarMenuButton
                               asChild={false}

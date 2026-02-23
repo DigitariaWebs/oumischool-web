@@ -6,23 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PaymentStatusBadge, StatusBadge } from "@/components/ui/status-badge";
-import {
-  PARENT_COLOR,
-  formatCurrency,
-  getParentInitials,
-  getPlanById,
-  mockParents,
-  mockPlans,
-} from "@/lib/data/parents";
-import { Parent, ParentStatus, PaymentStatus, PlanId } from "@/types";
+import { useCreateParent, useParents } from "@/hooks/parents";
+import type { AdminParent } from "@/hooks/parents/api";
+import { formatCurrency } from "@/lib/utils";
+import { Parent, ParentStatus, PlanId } from "@/types";
 import {
   Baby,
   CreditCard,
@@ -34,7 +22,108 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+const PARENT_COLOR = "oklch(0.52 0.14 250)";
+
+function getParentInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+const PLAN_META: Record<
+  PlanId,
+  {
+    name: string;
+    color: string;
+    price: number;
+    description: string;
+    maxChildren: number | null;
+    resourceAccess: boolean;
+    prioritySupport: boolean;
+  }
+> = {
+  starter: {
+    name: "Starter",
+    color: "oklch(0.58 0.16 155)",
+    price: 29,
+    description: "Plan d'entrée pour un enfant.",
+    maxChildren: 1,
+    resourceAccess: true,
+    prioritySupport: false,
+  },
+  family: {
+    name: "Family",
+    color: "oklch(0.62 0.16 80)",
+    price: 59,
+    description: "Plan famille avec plus de flexibilité.",
+    maxChildren: 3,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+  premium: {
+    name: "Premium",
+    color: "oklch(0.52 0.14 250)",
+    price: 89,
+    description: "Plan avancé avec support prioritaire.",
+    maxChildren: null,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+  custom: {
+    name: "Custom",
+    color: "oklch(0.68 0.18 20)",
+    price: 0,
+    description: "Plan personnalisé selon les besoins.",
+    maxChildren: null,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+};
+
+function getPlanMeta(planId?: PlanId) {
+  return planId ? PLAN_META[planId] : undefined;
+}
+
+function adaptParent(parent: AdminParent): Parent {
+  const normalizedStatus = String(parent.user?.status ?? "").toUpperCase();
+  const status: ParentStatus =
+    normalizedStatus === "ACTIVE"
+      ? "active"
+      : normalizedStatus === "SUSPENDED"
+        ? "suspended"
+        : "inactive";
+  const planId = parent.planId as PlanId | null;
+  const isKnownPlan = planId && planId in PLAN_META;
+
+  return {
+    id: parent.id,
+    name: `${parent.firstName} ${parent.lastName}`.trim(),
+    email: parent.user.email,
+    phone: "—",
+    location: "—",
+    status,
+    children: parent.children.map((child) => ({
+      name: child.name,
+      grade: child.grade,
+      age: 0,
+    })),
+    paymentStatus: parent.paymentStatus,
+    joinedDate: new Date(parent.user.createdAt).toLocaleDateString("fr-FR", {
+      month: "short",
+      year: "numeric",
+    }),
+    planId: isKnownPlan ? (planId as PlanId) : undefined,
+    notes: parent.notes ?? "",
+    totalPayments: parent.totalPayments,
+    monthlyFee: parent.monthlyFee ?? undefined,
+  };
+}
 
 // ─── Quick-view modal content ─────────────────────────────────────────────────
 
@@ -62,7 +151,7 @@ function ParentQuickView({ parent }: { parent: Parent }) {
             <PaymentStatusBadge status={parent.paymentStatus} />
             {parent.planId &&
               (() => {
-                const plan = getPlanById(parent.planId);
+                const plan = getPlanMeta(parent.planId);
                 return plan ? (
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
@@ -142,9 +231,9 @@ function ParentQuickView({ parent }: { parent: Parent }) {
               ? `Prochain: ${parent.nextPaymentDate}`
               : "Date de paiement N/D",
           },
-        ].map(({ icon: Icon, label }) => (
+        ].map(({ icon: Icon, label }, index) => (
           <div
-            key={label}
+            key={`${label}-${index}`}
             className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
           >
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -160,11 +249,11 @@ function ParentQuickView({ parent }: { parent: Parent }) {
             Enfants inscrits
           </p>
           <div className="space-y-2">
-            {parent.children.map((child) => {
+            {parent.children.map((child, index) => {
               const childInitials = getParentInitials(child.name);
               return (
                 <div
-                  key={child.name}
+                  key={`${child.name}-${index}`}
                   className="flex items-center gap-3 rounded-xl border border-border/50 px-3 py-2"
                   style={{ background: `${PARENT_COLOR}08` }}
                 >
@@ -192,7 +281,7 @@ function ParentQuickView({ parent }: { parent: Parent }) {
       {/* Plan */}
       {parent.planId &&
         (() => {
-          const plan = getPlanById(parent.planId);
+          const plan = getPlanMeta(parent.planId);
           if (!plan) return null;
           return (
             <div>
@@ -357,7 +446,7 @@ function buildColumns(): ColumnDef<Parent>[] {
       render: (parent) => {
         if (!parent.planId)
           return <span className="text-xs text-muted-foreground">—</span>;
-        const plan = getPlanById(parent.planId);
+        const plan = getPlanMeta(parent.planId);
         if (!plan) return null;
         return (
           <span
@@ -419,7 +508,10 @@ const filters = [
   {
     key: "planId",
     label: "Plan",
-    options: mockPlans.map((p) => ({ label: p.name, value: p.id })),
+    options: Object.entries(PLAN_META).map(([id, plan]) => ({
+      label: plan.name,
+      value: id,
+    })),
   },
 ];
 
@@ -428,52 +520,37 @@ const defaultFormState: {
   email: string;
   phone: string;
   location: string;
-  status: ParentStatus;
-  paymentStatus: PaymentStatus;
-  planId: PlanId;
 } = {
   name: "",
   email: "",
   phone: "",
   location: "",
-  status: "active",
-  paymentStatus: "pending",
-  planId: "starter",
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ParentsPage() {
-  const [parents, setParents] = useState<Parent[]>(mockParents);
+  const router = useRouter();
+  const { data: parentsData = [], isLoading } = useParents();
+  const createParent = useCreateParent();
   const [addOpen, setAddOpen] = useState(false);
   const [viewParent, setViewParent] = useState<Parent | null>(null);
   const [form, setForm] = useState(defaultFormState);
 
+  const parents = parentsData.map(adaptParent);
   const totalChildren = parents.reduce((acc, p) => acc + p.children.length, 0);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name || !form.email) return;
-    const newParent: Parent = {
-      id: `par${Date.now()}`,
-      name: form.name,
+    const parts = form.name.trim().split(" ");
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(" ") || parts[0];
+    await createParent.mutateAsync({
+      firstName,
+      lastName,
       email: form.email,
-      phone: form.phone,
-      location: form.location || "—",
-      status: form.status,
-      children: [],
-      paymentStatus: form.paymentStatus,
-      planId: form.planId,
-      joinedDate: new Date().toLocaleDateString("fr-FR", {
-        month: "short",
-        year: "numeric",
-      }),
-      notes: "",
-      totalPayments: 0,
-      lastPaymentDate: "—",
-      nextPaymentDate: "—",
-      monthlyFee: 0,
-    };
-    setParents((prev) => [newParent, ...prev]);
+      phone: form.phone || undefined,
+    });
     setForm(defaultFormState);
     setAddOpen(false);
   };
@@ -552,14 +629,20 @@ export default function ParentsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        <DataTable
-          data={parents}
-          columns={columns}
-          filters={filters}
-          searchKeys={["name", "email", "location"]}
-          itemsPerPage={8}
-          onRowClick={setViewParent}
-        />
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            Chargement des parents…
+          </div>
+        ) : (
+          <DataTable
+            data={parents}
+            columns={columns}
+            filters={filters}
+            searchKeys={["name", "email", "location"]}
+            itemsPerPage={8}
+            onRowClick={setViewParent}
+          />
+        )}
       </div>
 
       {/* Quick-view modal */}
@@ -576,7 +659,7 @@ export default function ParentsPage() {
             ? {
                 label: "Ouvrir le profil complet",
                 onClick: () => {
-                  window.location.href = `/dashboard/parents/${viewParent.id}`;
+                  router.push(`/dashboard/parents/${viewParent.id}`);
                 },
                 icon: <ExternalLink className="h-3.5 w-3.5" />,
               }
@@ -664,79 +747,11 @@ export default function ParentsPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Statut du compte</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as ParentStatus }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Actif</SelectItem>
-                  <SelectItem value="inactive">Inactif</SelectItem>
-                  <SelectItem value="suspended">Suspendu</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Statut de paiement</Label>
-              <Select
-                value={form.paymentStatus}
-                onValueChange={(v) =>
-                  setForm((f) => ({
-                    ...f,
-                    paymentStatus: v as PaymentStatus,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un statut de paiement" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="paid">Payé</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="overdue">En retard</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Plan</Label>
-            <Select
-              value={form.planId}
-              onValueChange={(v) =>
-                setForm((f) => ({ ...f, planId: v as PlanId }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un plan" />
-              </SelectTrigger>
-              <SelectContent>
-                {mockPlans.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    <span className="flex items-center gap-2">
-                      <ShieldCheck
-                        className="h-3.5 w-3.5"
-                        style={{ color: plan.color }}
-                      />
-                      {plan.name}
-                      <span className="text-muted-foreground text-xs">
-                        —{" "}
-                        {plan.price > 0
-                          ? `${formatCurrency(plan.price)}/mois`
-                          : "Sur mesure"}
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {createParent.isError && (
+            <p className="text-xs text-destructive">
+              Impossible de créer le parent.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

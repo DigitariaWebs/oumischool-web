@@ -3,22 +3,66 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthProfile, useLogin } from "@/hooks/auth";
+import { clearAuthToken, getAuthToken } from "@/lib/api-client";
 import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const hasToken = !!getAuthToken();
+  const profile = useAuthProfile(hasToken);
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [googlePending, setGooglePending] = useState(false);
+  const login = useLogin();
+
+  useEffect(() => {
+    if (hasToken && profile.data) {
+      if (String(profile.data.role).toUpperCase() === "ADMIN") {
+        router.replace("/dashboard");
+        return;
+      }
+      clearAuthToken();
+      router.replace("/login?reason=admin_only");
+    }
+  }, [hasToken, profile.data, router]);
+
+  const roleError =
+    params.get("reason") === "admin_only"
+      ? "Ce portail est réservé aux comptes super admin."
+      : null;
+  const oauthError = params.get("error");
+  const oauthErrorMessage = oauthError ?? null;
+
+  const handleGoogleLogin = () => {
+    if (typeof window === "undefined") return;
+    setGooglePending(true);
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+    const redirectUri = `${window.location.origin}/google/callback`;
+    const startUrl = `${apiBase}/auth/google/start?redirectUri=${encodeURIComponent(redirectUri)}`;
+    window.location.assign(startUrl);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setIsLoading(false);
-    window.location.href = "/dashboard";
+    setError(null);
+    try {
+      const result = await login.mutateAsync({ email, password });
+      if (String(result.user.role).toUpperCase() !== "ADMIN") {
+        clearAuthToken();
+        setError("Ce portail est réservé aux comptes super admin.");
+        return;
+      }
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Identifiants incorrects");
+    }
   };
 
   return (
@@ -248,13 +292,19 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {(error || roleError || oauthErrorMessage) && (
+              <p className="text-xs text-red-600 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                {error || roleError || oauthErrorMessage}
+              </p>
+            )}
+
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={login.isPending}
               className="w-full h-10 rounded-xl font-medium text-sm mt-2 text-white"
               style={{ background: "oklch(0.58 0.16 155)" }}
             >
-              {isLoading ? (
+              {login.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Connexion en cours…
@@ -275,6 +325,8 @@ export default function LoginPage() {
           {/* SSO hint */}
           <button
             type="button"
+            onClick={handleGoogleLogin}
+            disabled={googlePending}
             className="w-full h-10 rounded-xl border border-border/80 text-sm font-medium text-foreground/70 bg-card hover:bg-muted/60 transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -295,7 +347,9 @@ export default function LoginPage() {
                 fill="#EA4335"
               />
             </svg>
-            Continuer avec Google SSO
+            {googlePending
+              ? "Redirection vers Google..."
+              : "Continuer avec Google SSO"}
           </button>
 
           <p className="text-center text-xs text-muted-foreground/50 mt-8">

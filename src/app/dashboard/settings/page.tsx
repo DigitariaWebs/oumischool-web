@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useCommission, useUpdateCommission } from "@/hooks/settings";
 import { formatCurrency } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings";
 import {
@@ -11,6 +12,7 @@ import {
   TrendingUp,
   DollarSign,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -18,13 +20,19 @@ const EXAMPLE_AMOUNT = 1000;
 
 export default function SettingsPage() {
   const { platformCut, setPlatformCut } = useSettingsStore();
-  const [inputValue, setInputValue] = useState((platformCut * 100).toString());
+  const { data: commissionData } = useCommission();
+  const updateCommission = useUpdateCommission();
+  const [inputValue, setInputValue] = useState("");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const parsed = parseFloat(inputValue);
+  const activePlatformCut = commissionData?.commissionPct ?? platformCut;
+  const effectiveInput = dirty
+    ? inputValue
+    : (activePlatformCut * 100).toString();
+  const parsed = parseFloat(effectiveInput);
   const isValid = !isNaN(parsed) && parsed >= 0 && parsed <= 100;
-  const previewCut = isValid ? parsed / 100 : platformCut;
+  const previewCut = isValid ? parsed / 100 : activePlatformCut;
 
   const platformRevenue = EXAMPLE_AMOUNT * previewCut;
   const tutorRevenue = EXAMPLE_AMOUNT - platformRevenue;
@@ -39,16 +47,21 @@ export default function SettingsPage() {
     handleChange(parseFloat(e.target.value).toFixed(1));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isValid || !dirty) return;
-    setPlatformCut(parsed / 100);
-    setSaved(true);
-    setDirty(false);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      await updateCommission.mutateAsync(parsed / 100);
+      setPlatformCut(parsed / 100);
+      setSaved(true);
+      setDirty(false);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // error handled by mutation state
+    }
   };
 
   const handleReset = () => {
-    const current = (platformCut * 100).toString();
+    const current = (activePlatformCut * 100).toString();
     setInputValue(current);
     setDirty(false);
     setSaved(false);
@@ -107,7 +120,7 @@ export default function SettingsPage() {
                       min={0}
                       max={100}
                       step={0.1}
-                      value={inputValue}
+                      value={effectiveInput}
                       onChange={(e) => handleChange(e.target.value)}
                       data-invalid={!isValid || undefined}
                       className="h-8 w-24 pr-7 text-right text-sm aria-invalid:border-destructive"
@@ -125,11 +138,11 @@ export default function SettingsPage() {
                     min={0}
                     max={100}
                     step={0.1}
-                    value={isValid ? parsed : platformCut * 100}
+                    value={isValid ? parsed : activePlatformCut * 100}
                     onChange={handleSlider}
                     className="w-full h-1.5 appearance-none rounded-full outline-none cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, oklch(0.52 0.14 250) 0%, oklch(0.52 0.14 250) ${isValid ? parsed : platformCut * 100}%, oklch(0.91 0.012 80) ${isValid ? parsed : platformCut * 100}%, oklch(0.91 0.012 80) 100%)`,
+                      background: `linear-gradient(to right, oklch(0.52 0.14 250) 0%, oklch(0.52 0.14 250) ${isValid ? parsed : activePlatformCut * 100}%, oklch(0.91 0.012 80) ${isValid ? parsed : activePlatformCut * 100}%, oklch(0.91 0.012 80) 100%)`,
                     }}
                   />
                   <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground/60">
@@ -267,12 +280,19 @@ export default function SettingsPage() {
                   )}
                   <Button
                     size="sm"
-                    disabled={!isValid || !dirty}
+                    disabled={!isValid || !dirty || updateCommission.isPending}
                     className="rounded-xl text-white h-8 text-xs gap-1.5 disabled:opacity-40"
                     style={{ background: "oklch(0.58 0.16 155)" }}
                     onClick={handleSave}
                   >
-                    Enregistrer
+                    {updateCommission.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Enregistrement…
+                      </>
+                    ) : (
+                      "Enregistrer"
+                    )}
                   </Button>
                 </div>
               </div>
