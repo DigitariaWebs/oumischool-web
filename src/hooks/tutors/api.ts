@@ -28,10 +28,18 @@ export interface AdminTutor {
   user: AdminTutorUser;
 }
 
+export interface AdminTutorSession {
+  id: string;
+  startTime: string;
+  endTime: string;
+  subjectId: string | null;
+  status: string;
+}
+
 export interface AdminTutorDetail extends AdminTutor {
   revenue: { totalGross: number; totalCommission: number; totalNet: number };
   resources: unknown[];
-  sessions: unknown[];
+  sessions: AdminTutorSession[];
   lessonSeries: unknown[];
   reviews: unknown[];
   availability: unknown[];

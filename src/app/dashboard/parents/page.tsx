@@ -90,6 +90,13 @@ function getPlanMeta(planId?: PlanId) {
   return planId ? PLAN_META[planId] : undefined;
 }
 
+/** Normalize a plan name from the server (e.g. "Family") to a PlanId slug. */
+function normalizePlanId(name?: string | null): PlanId | undefined {
+  if (!name) return undefined;
+  const slug = name.toLowerCase().trim() as PlanId;
+  return slug in PLAN_META ? slug : undefined;
+}
+
 function adaptParent(parent: AdminParent): Parent {
   const normalizedStatus = String(parent.user?.status ?? "").toUpperCase();
   const status: ParentStatus =
@@ -98,8 +105,8 @@ function adaptParent(parent: AdminParent): Parent {
       : normalizedStatus === "SUSPENDED"
         ? "suspended"
         : "inactive";
-  const planId = parent.planId as PlanId | null;
-  const isKnownPlan = planId && planId in PLAN_META;
+  // Derive PlanId from subscription plan name, not from the raw UUID planId field
+  const planId = normalizePlanId(parent.subscription?.plan?.name);
 
   return {
     id: parent.id,
@@ -118,7 +125,7 @@ function adaptParent(parent: AdminParent): Parent {
       month: "short",
       year: "numeric",
     }),
-    planId: isKnownPlan ? (planId as PlanId) : undefined,
+    planId,
     notes: parent.notes ?? "",
     totalPayments: parent.totalPayments,
     monthlyFee: parent.monthlyFee ?? undefined,
@@ -303,8 +310,8 @@ function ParentQuickView({ parent }: { parent: Parent }) {
                     {plan.name}
                   </span>
                   <span className="text-xs font-medium text-muted-foreground">
-                    {plan.price > 0
-                      ? `${formatCurrency(plan.price)}/mois`
+                    {(parent.monthlyFee ?? plan.price) > 0
+                      ? `${formatCurrency(parent.monthlyFee ?? plan.price)}/mois`
                       : "Sur mesure"}
                   </span>
                 </div>

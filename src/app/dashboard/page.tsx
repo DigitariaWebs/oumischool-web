@@ -24,102 +24,6 @@ interface SubjectOption {
   name: string;
 }
 
-const recentActivity = [
-  {
-    id: 1,
-    type: "tutor",
-    action: "Nouveau tuteur inscrit",
-    name: "Aalvina Fatehi",
-    subject: "Physique",
-    time: "il y a 2 min",
-    status: "pending",
-  },
-  {
-    id: 2,
-    type: "parent",
-    action: "Parent a inscrit des enfants",
-    name: "Paulo Gavi",
-    subject: "2 enfants ajoutés",
-    time: "il y a 18 min",
-    status: "success",
-  },
-  {
-    id: 3,
-    type: "resource",
-    action: "Ressource publiée",
-    name: "Conception UI de base",
-    subject: "Design • Module 1",
-    time: "il y a 1 h",
-    status: "success",
-  },
-  {
-    id: 4,
-    type: "student",
-    action: "Étudiant a terminé l&apos;examen",
-    name: "Alex Sanches",
-    subject: "Typographie — 94%",
-    time: "il y a 2 h",
-    status: "success",
-  },
-  {
-    id: 5,
-    type: "tutor",
-    action: "Horaire du tuteur mis à jour",
-    name: "Mariam Khoury",
-    subject: "Mathématiques",
-    time: "il y a 3 h",
-    status: "info",
-  },
-  {
-    id: 6,
-    type: "parent",
-    action: "Compte parent signalé",
-    name: "Carlos Mendez",
-    subject: "Paiement en retard",
-    time: "il y a 5 h",
-    status: "warning",
-  },
-];
-
-const upcomingClasses = [
-  {
-    id: 1,
-    subject: "Histoire de la physique",
-    tutor: "Aalvina Fatehi",
-    time: "12 h – 15 h",
-    date: "20 fév",
-    students: 12,
-    color: "oklch(0.58 0.16 155)",
-  },
-  {
-    id: 2,
-    subject: "Conception UI de base",
-    tutor: "Sara Benali",
-    time: "08:00 – 09:30",
-    date: "20 fév",
-    students: 8,
-    color: "oklch(0.72 0.14 80)",
-  },
-  {
-    id: 3,
-    subject: "Géométrie",
-    tutor: "Omar Hadj",
-    time: "09:00 – 11:00",
-    date: "21 fév",
-    students: 15,
-    color: "oklch(0.65 0.12 220)",
-  },
-  {
-    id: 4,
-    subject: "Couleurs et éléments",
-    tutor: "Nina Roussel",
-    time: "10:00 – 12:00",
-    date: "21 fév",
-    students: 10,
-    color: "oklch(0.68 0.18 20)",
-  },
-];
-
 const quickActions = [
   {
     label: "Ajouter tuteur",
@@ -196,25 +100,25 @@ export default function DashboardPage() {
       value:
         metrics?.satisfactionRate != null
           ? `${metrics.satisfactionRate.toFixed(0)}%`
-          : "96%",
+          : "—",
       trend: "+2%",
       up: true,
     },
     {
       label: "Cours aujourd\u2019hui",
-      value: metrics?.classesToday?.toString() ?? "24",
+      value: metrics?.classesToday?.toString() ?? "—",
       trend: "+4",
       up: true,
     },
     {
       label: "Approbations en attente",
-      value: metrics?.pendingApprovals?.toString() ?? "7",
+      value: metrics?.pendingApprovals?.toString() ?? "—",
       trend: "-3",
       up: false,
     },
     {
       label: "Sessions actives",
-      value: metrics?.activeSessions?.toString() ?? "11",
+      value: metrics?.activeSessions?.toString() ?? "—",
       trend: "+11",
       up: true,
     },
@@ -241,7 +145,7 @@ export default function DashboardPage() {
               ? "warning"
               : "success",
       }))
-    : recentActivity;
+    : [];
 
   const upcomingClassItems = metrics?.upcomingClasses?.length
     ? metrics.upcomingClasses.map((item, index) => ({
@@ -264,7 +168,7 @@ export default function DashboardPage() {
         students: 1,
         color: upcomingColors[index % upcomingColors.length],
       }))
-    : upcomingClasses;
+    : [];
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

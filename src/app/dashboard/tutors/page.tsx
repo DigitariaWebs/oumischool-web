@@ -20,6 +20,7 @@ import {
   useCreateTutor,
   usePendingTutors,
   useRejectTutor,
+  useTutorDetail,
   useTutors,
 } from "@/hooks/tutors";
 import type { AdminTutor } from "@/hooks/tutors/api";
@@ -124,6 +125,22 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const { data: detail } = useTutorDetail(tutor.id);
+  const now = new Date();
+  const upcomingClasses =
+    detail?.sessions
+      .filter((s) => new Date(s.startTime) > now)
+      .slice(0, 2)
+      .map((s) => ({
+        subjectId: s.subjectId ?? "",
+        date: new Date(s.startTime).toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "short",
+        }),
+        time: `${new Date(s.startTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} – ${new Date(s.endTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`,
+        students: 1,
+      })) ?? tutor.upcomingClasses;
 
   return (
     <div className="space-y-6">
@@ -266,13 +283,13 @@ function TutorQuickView({ tutor }: { tutor: Tutor }) {
       )}
 
       {/* Upcoming classes preview */}
-      {tutor.upcomingClasses.length > 0 && (
+      {upcomingClasses.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
             Cours à venir
           </p>
           <div className="space-y-2">
-            {tutor.upcomingClasses.slice(0, 2).map((cls, index) => {
+            {upcomingClasses.slice(0, 2).map((cls, index) => {
               const clsColor = getSubjectColor(cls.subjectId);
               return (
                 <div
