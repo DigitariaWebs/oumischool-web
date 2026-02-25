@@ -29,6 +29,12 @@ export function useForgotPassword() {
   });
 }
 
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => authApi.verifyEmail(token),
+  });
+}
+
 export function useAuthProfile(enabled = true) {
   return useQuery({
     queryKey: authKeys.profile(),

@@ -33,4 +33,6 @@ export const authApi = {
   forgotPassword: (email: string) =>
     api.post<{ message: string }>("/auth/forgot-password", { email }),
   me: () => api.get<AuthProfile>("/users/me"),
+  verifyEmail: (token: string) =>
+    api.post<{ message: string }>("/auth/verify-email", { token }),
 };
