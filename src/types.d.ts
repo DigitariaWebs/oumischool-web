@@ -211,6 +211,7 @@ export interface Child {
   name: string;
   age: number;
   grade: string;
+  studentId?: string;
 }
 
 export interface Parent {

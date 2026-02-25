@@ -3,134 +3,55 @@
 import type { ColumnDef } from "@/components/ui/DataTable";
 import { DataTable } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { PaymentStatusBadge, StatusBadge } from "@/components/ui/status-badge";
-import { useCreateParent, useParents } from "@/hooks/parents";
-import type { AdminParent } from "@/hooks/parents/api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useActivateParent,
+  useCreateParent,
+  useDeactivateParent,
+  useParents,
+  useSuspendParent,
+} from "@/hooks/parents";
+import {
+  adaptParent,
+  getPlanMeta,
+  getParentInitials,
+  PLAN_META,
+} from "@/lib/parents";
 import { formatCurrency } from "@/lib/utils";
-import { Parent, ParentStatus, PlanId } from "@/types";
+import { Parent } from "@/types";
 import {
   Baby,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
   CreditCard,
   ExternalLink,
+  Eye,
+  Loader2,
   Mail,
   MapPin,
+  MoreHorizontal,
   Phone,
   Plus,
   ShieldCheck,
   UsersRound,
+  XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const PARENT_COLOR = "oklch(0.52 0.14 250)";
-
-function getParentInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-const PLAN_META: Record<
-  PlanId,
-  {
-    name: string;
-    color: string;
-    price: number;
-    description: string;
-    maxChildren: number | null;
-    resourceAccess: boolean;
-    prioritySupport: boolean;
-  }
-> = {
-  starter: {
-    name: "Starter",
-    color: "oklch(0.58 0.16 155)",
-    price: 29,
-    description: "Plan d'entrée pour un enfant.",
-    maxChildren: 1,
-    resourceAccess: true,
-    prioritySupport: false,
-  },
-  family: {
-    name: "Family",
-    color: "oklch(0.62 0.16 80)",
-    price: 59,
-    description: "Plan famille avec plus de flexibilité.",
-    maxChildren: 3,
-    resourceAccess: true,
-    prioritySupport: true,
-  },
-  premium: {
-    name: "Premium",
-    color: "oklch(0.52 0.14 250)",
-    price: 89,
-    description: "Plan avancé avec support prioritaire.",
-    maxChildren: null,
-    resourceAccess: true,
-    prioritySupport: true,
-  },
-  custom: {
-    name: "Custom",
-    color: "oklch(0.68 0.18 20)",
-    price: 0,
-    description: "Plan personnalisé selon les besoins.",
-    maxChildren: null,
-    resourceAccess: true,
-    prioritySupport: true,
-  },
-};
-
-function getPlanMeta(planId?: PlanId) {
-  return planId ? PLAN_META[planId] : undefined;
-}
-
-/** Normalize a plan name from the server (e.g. "Family") to a PlanId slug. */
-function normalizePlanId(name?: string | null): PlanId | undefined {
-  if (!name) return undefined;
-  const slug = name.toLowerCase().trim() as PlanId;
-  return slug in PLAN_META ? slug : undefined;
-}
-
-function adaptParent(parent: AdminParent): Parent {
-  const normalizedStatus = String(parent.user?.status ?? "").toUpperCase();
-  const status: ParentStatus =
-    normalizedStatus === "ACTIVE"
-      ? "active"
-      : normalizedStatus === "SUSPENDED"
-        ? "suspended"
-        : "inactive";
-  // Derive PlanId from subscription plan name, not from the raw UUID planId field
-  const planId = normalizePlanId(parent.subscription?.plan?.name);
-
-  return {
-    id: parent.id,
-    name: `${parent.firstName} ${parent.lastName}`.trim(),
-    email: parent.user.email,
-    phone: "—",
-    location: "—",
-    status,
-    children: parent.children.map((child) => ({
-      name: child.name,
-      grade: child.grade,
-      age: 0,
-    })),
-    paymentStatus: parent.paymentStatus,
-    joinedDate: new Date(parent.user.createdAt).toLocaleDateString("fr-FR", {
-      month: "short",
-      year: "numeric",
-    }),
-    planId,
-    notes: parent.notes ?? "",
-    totalPayments: parent.totalPayments,
-    monthlyFee: parent.monthlyFee ?? undefined,
-  };
-}
 
 // ─── Quick-view modal content ─────────────────────────────────────────────────
 
@@ -139,7 +60,6 @@ function ParentQuickView({ parent }: { parent: Parent }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile header */}
       <div className="flex items-start gap-4">
         <div
           className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-bold text-white shadow-sm"
@@ -177,7 +97,6 @@ function ParentQuickView({ parent }: { parent: Parent }) {
         </div>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
           {
@@ -226,14 +145,13 @@ function ParentQuickView({ parent }: { parent: Parent }) {
         })}
       </div>
 
-      {/* Contact & details */}
       <div className="grid grid-cols-2 gap-3">
         {[
           { icon: Mail, label: parent.email },
           { icon: Phone, label: parent.phone },
           { icon: MapPin, label: parent.location },
           {
-            icon: CreditCard,
+            icon: CalendarDays,
             label: parent.nextPaymentDate
               ? `Prochain: ${parent.nextPaymentDate}`
               : "Date de paiement N/D",
@@ -249,7 +167,6 @@ function ParentQuickView({ parent }: { parent: Parent }) {
         ))}
       </div>
 
-      {/* Children */}
       {parent.children.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -285,7 +202,6 @@ function ParentQuickView({ parent }: { parent: Parent }) {
         </div>
       )}
 
-      {/* Plan */}
       {parent.planId &&
         (() => {
           const plan = getPlanMeta(parent.planId);
@@ -362,7 +278,6 @@ function ParentQuickView({ parent }: { parent: Parent }) {
           );
         })()}
 
-      {/* Notes */}
       {parent.notes && (
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
@@ -377,9 +292,87 @@ function ParentQuickView({ parent }: { parent: Parent }) {
   );
 }
 
+// ─── Row actions ─────────────────────────────────────────────────────────────
+
+function ParentActions({
+  parent,
+  onView,
+  onActivate,
+  onSuspend,
+  onDeactivate,
+}: {
+  parent: Parent;
+  onView: (p: Parent) => void;
+  onActivate?: (p: Parent) => void;
+  onSuspend?: (p: Parent) => void;
+  onDeactivate?: (p: Parent) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 rounded-lg p-0 text-muted-foreground hover:text-foreground"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem
+          className="gap-2 text-xs"
+          onClick={() => onView(parent)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Aperçu rapide
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2 text-xs" asChild>
+          <a href={`/dashboard/parents/${parent.id}`}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            Profil complet
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {parent.status === "inactive" && onActivate && (
+          <DropdownMenuItem
+            className="gap-2 text-xs text-green-700 focus:text-green-700 focus:bg-green-50"
+            onClick={() => onActivate(parent)}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Activer
+          </DropdownMenuItem>
+        )}
+        {parent.status === "active" && onSuspend && (
+          <DropdownMenuItem
+            className="gap-2 text-xs text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+            onClick={() => onSuspend(parent)}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Suspendre
+          </DropdownMenuItem>
+        )}
+        {parent.status !== "inactive" && onDeactivate && (
+          <DropdownMenuItem
+            className="gap-2 text-xs text-red-600 focus:text-red-600 focus:bg-red-50"
+            onClick={() => onDeactivate(parent)}
+          >
+            <XCircle className="h-3.5 w-3.5" />
+            Désactiver
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── Table columns ────────────────────────────────────────────────────────────
 
-function buildColumns(): ColumnDef<Parent>[] {
+function buildColumns(
+  onView: (p: Parent) => void,
+  onActivate?: (p: Parent) => void,
+  onSuspend?: (p: Parent) => void,
+  onDeactivate?: (p: Parent) => void,
+): ColumnDef<Parent>[] {
   return [
     {
       key: "name",
@@ -488,10 +481,24 @@ function buildColumns(): ColumnDef<Parent>[] {
         </span>
       ),
     },
+    {
+      key: "id",
+      label: "Actions",
+      sortable: false,
+      render: (parent) => (
+        <ParentActions
+          parent={parent}
+          onView={onView}
+          onActivate={onActivate}
+          onSuspend={onSuspend}
+          onDeactivate={onDeactivate}
+        />
+      ),
+    },
   ];
 }
 
-// ─── Static data ──────────────────────────────────────────────────────────────
+// ─── Static data ─────────────────────────────────────────────────────────────
 
 const filters = [
   {
@@ -540,11 +547,21 @@ export default function ParentsPage() {
   const router = useRouter();
   const { data: parentsData = [], isLoading } = useParents();
   const createParent = useCreateParent();
+  const activateParent = useActivateParent();
+  const suspendParent = useSuspendParent();
+  const deactivateParent = useDeactivateParent();
+
   const [addOpen, setAddOpen] = useState(false);
   const [viewParent, setViewParent] = useState<Parent | null>(null);
   const [form, setForm] = useState(defaultFormState);
 
   const parents = parentsData.map(adaptParent);
+
+  const activeParents = parents.filter((p) => p.status === "active");
+  const inactiveParents = parents.filter((p) => p.status === "inactive");
+  const suspendedParents = parents.filter((p) => p.status === "suspended");
+  const overdueParents = parents.filter((p) => p.paymentStatus === "overdue");
+
   const totalChildren = parents.reduce((acc, p) => acc + p.children.length, 0);
 
   const handleAdd = async () => {
@@ -562,7 +579,24 @@ export default function ParentsPage() {
     setAddOpen(false);
   };
 
-  const columns = buildColumns();
+  const handleActivate = async (parent: Parent) => {
+    await activateParent.mutateAsync(parent.id).catch(() => {});
+  };
+
+  const handleSuspend = async (parent: Parent) => {
+    await suspendParent.mutateAsync(parent.id).catch(() => {});
+  };
+
+  const handleDeactivate = async (parent: Parent) => {
+    await deactivateParent.mutateAsync(parent.id).catch(() => {});
+  };
+
+  const columns = buildColumns(
+    setViewParent,
+    handleActivate,
+    handleSuspend,
+    handleDeactivate,
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -588,68 +622,216 @@ export default function ParentsPage() {
         </Button>
       </header>
 
-      {/* Summary pills */}
-      <div className="flex items-center gap-3 border-b border-border/40 bg-background px-6 py-2.5">
-        {[
-          {
-            label: "Actifs",
-            count: parents.filter((p) => p.status === "active").length,
-            style: {
-              background: "oklch(0.95 0.018 155)",
-              color: "oklch(0.38 0.12 155)",
-            },
-          },
-          {
-            label: "Inactifs",
-            count: parents.filter((p) => p.status === "inactive").length,
-            style: {
-              background: "oklch(0.94 0.008 80)",
-              color: "oklch(0.48 0.02 250)",
-            },
-          },
-          {
-            label: "Suspendus",
-            count: parents.filter((p) => p.status === "suspended").length,
-            style: {
-              background: "oklch(0.96 0.025 20)",
-              color: "oklch(0.48 0.16 20)",
-            },
-          },
-          {
-            label: "Paiement en retard",
-            count: parents.filter((p) => p.paymentStatus === "overdue").length,
-            style: {
-              background: "oklch(0.96 0.025 20)",
-              color: "oklch(0.48 0.16 20)",
-            },
-          },
-        ].map((pill) => (
-          <span
-            key={pill.label}
-            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-            style={pill.style}
+      {/* Tabs + content */}
+      <div className="flex-1 overflow-y-auto">
+        <Tabs defaultValue="all" className="h-full">
+          <TabsList
+            variant="line"
+            className="w-full justify-start border-b border-border/60 rounded-none pb-0 h-auto bg-background px-6"
           >
-            {pill.label}: <strong>{pill.count}</strong>
-          </span>
-        ))}
-      </div>
+            <TabsTrigger value="all" className="gap-1.5 pb-3">
+              Tous les parents
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.94 0.008 80)",
+                  color: "oklch(0.48 0.02 250)",
+                }}
+              >
+                {parents.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="active" className="gap-1.5 pb-3">
+              Actifs
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.95 0.018 155)",
+                  color: "oklch(0.38 0.12 155)",
+                }}
+              >
+                {activeParents.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="inactive" className="gap-1.5 pb-3">
+              Inactifs
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.94 0.008 80)",
+                  color: "oklch(0.48 0.02 250)",
+                }}
+              >
+                {inactiveParents.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="suspended" className="gap-1.5 pb-3">
+              Suspendus
+              {suspendedParents.length > 0 && (
+                <span
+                  className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                  style={{
+                    background: "oklch(0.96 0.025 20)",
+                    color: "oklch(0.48 0.16 20)",
+                  }}
+                >
+                  {suspendedParents.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="overdue" className="gap-1.5 pb-3">
+              Paiement en retard
+              {overdueParents.length > 0 && (
+                <span
+                  className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                  style={{
+                    background: "oklch(0.96 0.025 20)",
+                    color: "oklch(0.48 0.16 20)",
+                  }}
+                >
+                  {overdueParents.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {isLoading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            Chargement des parents…
-          </div>
-        ) : (
-          <DataTable
-            data={parents}
-            columns={columns}
-            filters={filters}
-            searchKeys={["name", "email", "location"]}
-            itemsPerPage={8}
-            onRowClick={setViewParent}
-          />
-        )}
+          {/* Overdue payment banner */}
+          {overdueParents.length > 0 && (
+            <div
+              className="mx-6 mt-3 flex items-start gap-3 rounded-xl border px-4 py-3"
+              style={{
+                background: "oklch(0.96 0.025 20)",
+                borderColor: "oklch(0.88 0.08 20)",
+              }}
+            >
+              <Clock
+                className="mt-0.5 h-4 w-4 shrink-0"
+                style={{ color: "oklch(0.48 0.16 20)" }}
+              />
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: "oklch(0.38 0.14 20)" }}
+              >
+                <strong>
+                  {overdueParents.length} parent
+                  {overdueParents.length > 1 ? "s" : ""}
+                </strong>{" "}
+                avec des paiements en retard. Pensez à les contacter pour
+                régulariser leur situation.
+              </p>
+            </div>
+          )}
+
+          <TabsContent value="all" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : parents.length === 0 ? (
+              <EmptyState
+                title="Aucun parent"
+                description="Aucun parent n'a encore été inscrit sur la plateforme."
+              />
+            ) : (
+              <DataTable
+                data={parents}
+                columns={columns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewParent}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="active" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : activeParents.length === 0 ? (
+              <EmptyState
+                title="Aucun parent actif"
+                description="Aucun parent actif pour le moment."
+              />
+            ) : (
+              <DataTable
+                data={activeParents}
+                columns={columns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewParent}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="inactive" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : inactiveParents.length === 0 ? (
+              <EmptyState
+                title="Aucun parent inactif"
+                description="Tous les parents sont actifs."
+              />
+            ) : (
+              <DataTable
+                data={inactiveParents}
+                columns={columns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewParent}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="suspended" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : suspendedParents.length === 0 ? (
+              <EmptyState
+                title="Aucun parent suspendu"
+                description="Aucun parent suspendu pour le moment."
+              />
+            ) : (
+              <DataTable
+                data={suspendedParents}
+                columns={columns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewParent}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="overdue" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : overdueParents.length === 0 ? (
+              <EmptyState
+                title="Aucun paiement en retard"
+                description="Tous les parents sont à jour dans leurs paiements."
+              />
+            ) : (
+              <DataTable
+                data={overdueParents}
+                columns={columns}
+                filters={filters}
+                searchKeys={["name", "email", "location"]}
+                itemsPerPage={8}
+                onRowClick={setViewParent}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Quick-view modal */}
@@ -691,7 +873,9 @@ export default function ParentsPage() {
         size="md"
         actions={{
           primary: {
-            label: "Ajouter parent",
+            label: createParent.isPending
+              ? "Ajout en cours…"
+              : "Ajouter parent",
             onClick: handleAdd,
           },
           secondary: {
@@ -761,6 +945,30 @@ export default function ParentsPage() {
           )}
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div
+        className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+        style={{ background: "oklch(0.95 0.018 155)" }}
+      >
+        <CheckCircle2
+          className="h-7 w-7"
+          style={{ color: "oklch(0.58 0.16 155)" }}
+        />
+      </div>
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
