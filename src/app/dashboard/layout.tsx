@@ -5,7 +5,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/auth";
 import { clearAuthToken, getAuthToken } from "@/lib/api-client";
 import {
+  Banknote,
   BookOpen,
+  CreditCard,
   GraduationCap,
   LayoutDashboard,
   Settings,
@@ -53,6 +55,21 @@ const menuSections = [
         title: "Ressources",
         url: "/dashboard/resources",
         icon: BookOpen,
+      },
+    ],
+  },
+  {
+    label: "Paiements",
+    items: [
+      {
+        title: "Abonnements",
+        url: "/dashboard/payments/subscriptions",
+        icon: CreditCard,
+      },
+      {
+        title: "Paiements",
+        url: "/dashboard/payments/payouts",
+        icon: Banknote,
       },
     ],
   },
