@@ -726,7 +726,7 @@ export default function TutorsPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-foreground tracking-tight">
             <GraduationCap className="h-4 w-4 text-muted-foreground" />
@@ -792,7 +792,7 @@ export default function TutorsPage() {
             </TabsList>
           </div>
 
-          <TabsContent value="all" className="p-6">
+          <TabsContent value="all" className="p-4 md:p-6">
             {loadingAll ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -809,7 +809,7 @@ export default function TutorsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="pending" className="p-6">
+          <TabsContent value="pending" className="p-4 md:p-6">
             {loadingPending ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

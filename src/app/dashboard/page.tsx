@@ -173,7 +173,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Top bar */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:px-6">
         <div>
           <h1 className="text-base font-semibold text-foreground tracking-tight">
             Tableau de bord
@@ -202,7 +202,7 @@ export default function DashboardPage() {
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-6">
           {/* Stat cards */}
           <InfoCardContainer>
             <InfoCard
@@ -328,7 +328,7 @@ export default function DashboardPage() {
                 <h2 className="text-sm font-semibold text-foreground mb-3">
                   Actions rapides
                 </h2>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {quickActions.map((action) => {
                     const Icon = action.icon;
                     return (

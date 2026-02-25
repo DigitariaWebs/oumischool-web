@@ -601,7 +601,7 @@ export default function ParentsPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-foreground tracking-tight">
             <UsersRound className="h-4 w-4 text-muted-foreground" />
@@ -722,7 +722,7 @@ export default function ParentsPage() {
             </div>
           )}
 
-          <TabsContent value="all" className="p-6">
+          <TabsContent value="all" className="p-4 md:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -744,7 +744,7 @@ export default function ParentsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="active" className="p-6">
+          <TabsContent value="active" className="p-4 md:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -766,7 +766,7 @@ export default function ParentsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="inactive" className="p-6">
+          <TabsContent value="inactive" className="p-4 md:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -788,7 +788,7 @@ export default function ParentsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="suspended" className="p-6">
+          <TabsContent value="suspended" className="p-4 md:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -810,7 +810,7 @@ export default function ParentsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="overdue" className="p-6">
+          <TabsContent value="overdue" className="p-4 md:p-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -45,11 +45,11 @@ export interface ModalProps {
 }
 
 const sizeClasses = {
-  sm: "min-w-md",
-  md: "min-w-lg",
-  lg: "min-w-2xl",
-  xl: "min-w-4xl min-w-[72rem]",
-  full: "min-w-7xl",
+  sm: "max-w-sm sm:min-w-md",
+  md: "max-w-md sm:min-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-3xl sm:max-w-4xl sm:min-w-[72rem]",
+  full: "max-w-[95vw] sm:min-w-7xl",
 };
 
 const defaultSizes: Record<ModalProps["type"], keyof typeof sizeClasses> = {
@@ -138,15 +138,15 @@ export function Modal({
           </div>
         </DialogHeader>
 
-        <div className="py-4 px-2 overflow-y-auto">{children}</div>
+        <div className="py-4 px-2 sm:px-4 overflow-y-auto">{children}</div>
 
         {footer ? (
           <DialogFooter>{footer}</DialogFooter>
         ) : (
           actions &&
           (actions.primary || actions.secondary || actions.tertiary) && (
-            <DialogFooter className="gap-2">
-              <div className="flex items-center justify-between w-full gap-2">
+            <DialogFooter className="gap-2 flex-col sm:flex-row">
+              <div className="flex gap-2 w-full sm:w-auto justify-start">
                 <div className="flex gap-2">
                   {actions.tertiary && (
                     <Button
@@ -162,7 +162,7 @@ export function Modal({
                     </Button>
                   )}
                 </div>
-                <div className="flex gap-2 ml-auto">
+                <div className="flex gap-2 w-full sm:w-auto sm:ml-auto justify-end">
                   {actions.secondary && (
                     <Button
                       variant={actions.secondary.variant || "outline"}

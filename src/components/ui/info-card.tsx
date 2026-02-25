@@ -17,12 +17,12 @@ const InfoCard = React.forwardRef<HTMLDivElement, InfoCardProps>(
     const textColor = `text-${color}-600`;
     return (
       <Card ref={ref} className={cn("", className)}>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className={`p-3 ${bgColor} rounded-full`}>
-              <Icon className={`h-6 w-6 ${textColor}`} />
+        <CardContent className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4">
+            <div className={`p-2.5 sm:p-3 ${bgColor} rounded-full`}>
+              <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${textColor}`} />
             </div>
-            <div>
+            <div className="text-center sm:text-left">
               <p className={`text-sm font-medium ${textColor}`}>{title}</p>
               <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
               {subtext && (

@@ -389,7 +389,7 @@ export default function PayoutsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-foreground tracking-tight">
             <Banknote className="h-4 w-4 text-muted-foreground" />
@@ -401,7 +401,7 @@ export default function PayoutsPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         {tutorsLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

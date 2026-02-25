@@ -645,7 +645,7 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-4 md:px-6">
         <div>
           <h1 className="flex items-center gap-2 text-base font-semibold text-foreground tracking-tight">
             <CreditCard className="h-4 w-4 text-muted-foreground" />
@@ -691,7 +691,7 @@ export default function SubscriptionsPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="subscriptions" className="p-6">
+          <TabsContent value="subscriptions" className="p-4 md:p-6">
             {parentsLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -713,7 +713,7 @@ export default function SubscriptionsPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="orders" className="p-6">
+          <TabsContent value="orders" className="p-4 md:p-6">
             {ordersLoading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
