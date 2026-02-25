@@ -42,11 +42,15 @@ export const resourcesApi = {
     >("/admin/resources");
     return asList<AdminResource>(res);
   },
+  detail: (id: string) => api.get<AdminResource>(`/admin/resources/${id}`),
   create: (body: CreateResourcePayload) =>
     api.post<AdminResource>("/resources", body),
   createUpload: (form: FormData) =>
     api.postForm<AdminResource>("/resources/upload", form),
   update: (id: string, body: UpdateResourcePayload) =>
     api.put<AdminResource>(`/resources/${id}`, body),
-  archive: (id: string) => api.del<unknown>(`/resources/${id}`),
+  updateStatus: (id: string, status: string) =>
+    api.put<AdminResource>(`/admin/resources/${id}/status`, { status }),
+  archive: (id: string) =>
+    api.post<unknown>(`/admin/resources/${id}/archive`, {}),
 };

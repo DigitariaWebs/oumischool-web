@@ -15,6 +15,14 @@ export function useResources() {
   });
 }
 
+export function useResourceDetail(id: string) {
+  return useQuery({
+    queryKey: resourceKeys.detail(id),
+    queryFn: () => resourcesApi.detail(id),
+    enabled: !!id,
+  });
+}
+
 export function useCreateResource() {
   const qc = useQueryClient();
   return useMutation({
@@ -40,6 +48,17 @@ export function useUpdateResource() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateResourcePayload }) =>
       resourcesApi.update(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: resourceKeys.all });
+    },
+  });
+}
+
+export function useUpdateResourceStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      resourcesApi.updateStatus(id, status),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: resourceKeys.all });
     },

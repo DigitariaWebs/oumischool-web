@@ -3,6 +3,13 @@
 import { DataTable } from "@/components/ui/DataTable";
 import type { ColumnDef } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
@@ -14,25 +21,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useCreateResourceUpload, useResources } from "@/hooks/resources";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useArchiveResource,
+  useCreateResourceUpload,
+  useResources,
+  useUpdateResourceStatus,
+} from "@/hooks/resources";
 import type { AdminResource } from "@/hooks/resources/api";
 import { api } from "@/lib/api-client";
 import { Resource, ResourceStatus, ResourceType } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Archive,
   BookOpen,
-  Plus,
-  FileText,
-  Video,
-  Music,
-  Image,
-  File,
-  Eye,
+  CheckCircle2,
   Download,
-  Tag,
   ExternalLink,
+  Eye,
+  File,
+  FileText,
+  FileVideo,
+  Image,
+  Loader2,
+  MoreHorizontal,
+  Music,
+  Plus,
+  Tag,
+  Trash2,
+  XCircle,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+const RESOURCE_COLOR = "oklch(0.60 0.18 20)";
 
 interface SubjectOption {
   id: string;
@@ -93,7 +116,7 @@ const typeIcons: Record<
   React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 > = {
   document: FileText,
-  video: Video,
+  video: FileVideo,
   audio: Music,
   image: Image,
   other: File,
@@ -117,201 +140,412 @@ const subjectColors: Record<string, string> = {
   "3D Objects": "oklch(0.60 0.13 180)",
 };
 
-const columns: ColumnDef<Resource>[] = [
-  {
-    key: "title",
-    label: "Resource",
-    sortable: true,
-    render: (resource) => {
-      const TypeIcon = typeIcons[resource.type];
-      const typeStyle = typeColors[resource.type];
-      return (
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: typeStyle.bg }}
-          >
-            <TypeIcon className="h-4 w-4" style={{ color: typeStyle.color }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate max-w-55">
+function ResourceQuickView({ resource }: { resource: Resource }) {
+  const TypeIcon = typeIcons[resource.type];
+  const typeStyle = typeColors[resource.type];
+  const url = resolveApiResourceUrl(resource.fileUrl);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-4">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl"
+          style={{ background: typeStyle.bg, color: typeStyle.color }}
+        >
+          <TypeIcon className="h-7 w-7" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-semibold text-foreground">
               {resource.title}
-            </p>
-            <p className="text-[11px] text-muted-foreground truncate max-w-55">
-              {resource.description}
-            </p>
+            </h3>
+            <StatusBadge status={resource.status} />
+          </div>
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize"
+              style={{ background: typeStyle.bg, color: typeStyle.color }}
+            >
+              {resource.type}
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-xs text-muted-foreground">
+              {resource.subject}
+            </span>
           </div>
         </div>
-      );
-    },
-  },
-  {
-    key: "type",
-    label: "Type",
-    sortable: true,
-    render: (resource) => {
-      const style = typeColors[resource.type];
-      return (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
-          style={{ background: style.bg, color: style.color }}
-        >
-          {resource.type}
-        </span>
-      );
-    },
-  },
-  {
-    key: "subject",
-    label: "Subject",
-    sortable: true,
-    render: (resource) => {
-      const color = subjectColors[resource.subject] ?? "oklch(0.58 0.16 155)";
-      return (
-        <div className="flex items-center gap-1.5">
-          <BookOpen className="h-3.5 w-3.5" style={{ color }} />
-          <span className="text-sm">{resource.subject}</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          {
+            label: "Vues",
+            value: resource.views.toLocaleString(),
+            icon: Eye,
+            color: "oklch(0.52 0.14 250)",
+            bg: "oklch(0.93 0.02 250)",
+          },
+          {
+            label: "Téléchargements",
+            value: resource.downloads.toLocaleString(),
+            icon: Download,
+            color: "oklch(0.58 0.16 155)",
+            bg: "oklch(0.95 0.018 155)",
+          },
+          {
+            label: "Prix",
+            value: resource.isPaid
+              ? resource.price
+                ? `$${(resource.price / 100).toFixed(2)}`
+                : "Payant"
+              : "Gratuit",
+            icon: resource.isPaid ? FileText : CheckCircle2,
+            color: resource.isPaid
+              ? "oklch(0.45 0.14 155)"
+              : "oklch(0.58 0.16 155)",
+            bg: resource.isPaid
+              ? "oklch(0.95 0.025 155)"
+              : "oklch(0.95 0.018 155)",
+          },
+        ].map((s) => {
+          const Icon = s.icon;
+          return (
+            <div
+              key={s.label}
+              className="flex flex-col items-center gap-1.5 rounded-xl p-3"
+              style={{ background: s.bg }}
+            >
+              <Icon className="h-4 w-4" style={{ color: s.color }} />
+              <span
+                className="text-sm font-bold text-center"
+                style={{ color: s.color }}
+              >
+                {s.value}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {resource.description && (
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Description
+          </p>
+          <p className="text-sm text-foreground/80 leading-relaxed rounded-xl bg-muted/40 px-3 py-2.5">
+            {resource.description}
+          </p>
         </div>
-      );
-    },
-  },
-  {
-    key: "status",
-    label: "Status",
-    sortable: true,
-    render: (resource) => <StatusBadge status={resource.status} />,
-  },
-  {
-    key: "isPaid",
-    label: "Price",
-    sortable: false,
-    render: (resource) =>
-      resource.isPaid ? (
-        <span
-          className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
-          style={{
-            background: "oklch(0.95 0.025 155)",
-            color: "oklch(0.45 0.14 155)",
-          }}
-        >
-          {resource.price ? `$${(resource.price / 100).toFixed(2)}` : "Paid"}
-        </span>
-      ) : (
-        <span className="text-xs text-muted-foreground">Free</span>
-      ),
-  },
-  {
-    key: "actions",
-    label: "File",
-    sortable: false,
-    render: (resource) => {
-      const url = resolveApiResourceUrl(resource.fileUrl);
-      if (!url) {
-        return <span className="text-xs text-muted-foreground">No file</span>;
-      }
-      return (
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { icon: BookOpen, label: resource.subject },
+          { icon: File, label: resource.fileSize },
+          { icon: Tag, label: resource.uploadedBy },
+          { icon: ExternalLink, label: resource.uploadedDate },
+        ].map(({ icon: Icon, label }, index) => (
+          <div
+            key={`${label}-${index}`}
+            className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5"
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs text-foreground/80 truncate">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {resource.tags.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Tags
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {resource.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium"
+                style={{
+                  background: "oklch(0.94 0.008 80)",
+                  color: "oklch(0.48 0.02 250)",
+                }}
+              >
+                <Tag className="h-3 w-3" />
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {url && (
         <a
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          className="flex items-center justify-center gap-2 rounded-xl border border-border/60 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
         >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open
+          <ExternalLink className="h-4 w-4" />
+          Ouvrir le fichier
         </a>
-      );
-    },
-  },
-  {
-    key: "views",
-    label: "Views",
-    sortable: true,
-    render: (resource) => (
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Eye className="h-3.5 w-3.5" />
-        {resource.views.toLocaleString()}
-      </div>
-    ),
-  },
-  {
-    key: "downloads",
-    label: "Downloads",
-    sortable: true,
-    render: (resource) => (
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Download className="h-3.5 w-3.5" />
-        {resource.downloads.toLocaleString()}
-      </div>
-    ),
-  },
-  {
-    key: "tags",
-    label: "Tags",
-    sortable: false,
-    render: (resource) => {
-      const tags = resource.tags;
-      return (
-        <div className="flex flex-wrap gap-1">
-          {tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                background: "oklch(0.94 0.008 80)",
-                color: "oklch(0.48 0.02 250)",
-              }}
+      )}
+    </div>
+  );
+}
+
+function ResourceActions({
+  resource,
+  onView,
+  onArchive,
+  onUnarchive,
+}: {
+  resource: Resource;
+  onView: (r: Resource) => void;
+  onArchive?: (r: Resource) => void;
+  onUnarchive?: (r: Resource) => void;
+}) {
+  const url = resolveApiResourceUrl(resource.fileUrl);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 rounded-lg p-0 text-muted-foreground hover:text-foreground"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem
+          className="gap-2 text-xs"
+          onClick={() => onView(resource)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Aperçu rapide
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-2 text-xs" asChild>
+          <Link href={`/dashboard/resources/${resource.id}`}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            Profil complet
+          </Link>
+        </DropdownMenuItem>
+        {url && (
+          <DropdownMenuItem className="gap-2 text-xs" asChild>
+            <a href={url} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Ouvrir le fichier
+            </a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        {resource.status === "archived" && onUnarchive && (
+          <DropdownMenuItem
+            className="gap-2 text-xs text-green-700 focus:text-green-700 focus:bg-green-50"
+            onClick={() => onUnarchive(resource)}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Désarchiver
+          </DropdownMenuItem>
+        )}
+        {(resource.status === "published" || resource.status === "draft") &&
+          onArchive && (
+            <DropdownMenuItem
+              className="gap-2 text-xs text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+              onClick={() => onArchive(resource)}
             >
-              <Tag className="h-2.5 w-2.5" />
-              {tag}
-            </span>
-          ))}
-          {tags.length > 2 && (
-            <span className="text-[10px] text-muted-foreground self-center">
-              +{tags.length - 2}
-            </span>
+              <Archive className="h-3.5 w-3.5" />
+              Archiver
+            </DropdownMenuItem>
           )}
-        </div>
-      );
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function buildColumns(
+  onView: (r: Resource) => void,
+  onArchive?: (r: Resource) => void,
+  onUnarchive?: (r: Resource) => void,
+): ColumnDef<Resource>[] {
+  return [
+    {
+      key: "title",
+      label: "Ressource",
+      sortable: true,
+      render: (resource) => {
+        const TypeIcon = typeIcons[resource.type];
+        const typeStyle = typeColors[resource.type];
+        return (
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: typeStyle.bg }}
+            >
+              <TypeIcon
+                className="h-4 w-4"
+                style={{ color: typeStyle.color }}
+              />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate max-w-55">
+                {resource.title}
+              </p>
+              <p className="text-[11px] text-muted-foreground truncate max-w-55">
+                {resource.description}
+              </p>
+            </div>
+          </div>
+        );
+      },
     },
-  },
-  {
-    key: "uploadedBy",
-    label: "Uploaded By",
-    sortable: true,
-    render: (resource) => (
-      <span className="text-sm text-muted-foreground">
-        {resource.uploadedBy}
-      </span>
-    ),
-  },
-  {
-    key: "fileSize",
-    label: "Size",
-    sortable: false,
-    render: (resource) => (
-      <span className="text-sm text-muted-foreground">{resource.fileSize}</span>
-    ),
-  },
-  {
-    key: "uploadedDate",
-    label: "Uploaded",
-    sortable: true,
-    render: (resource) => (
-      <span className="text-sm text-muted-foreground">
-        {resource.uploadedDate}
-      </span>
-    ),
-  },
-];
+    {
+      key: "type",
+      label: "Type",
+      sortable: true,
+      render: (resource) => {
+        const style = typeColors[resource.type];
+        return (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
+            style={{ background: style.bg, color: style.color }}
+          >
+            {resource.type}
+          </span>
+        );
+      },
+    },
+    {
+      key: "subject",
+      label: "Matière",
+      sortable: true,
+      render: (resource) => {
+        const color = subjectColors[resource.subject] ?? "oklch(0.58 0.16 155)";
+        return (
+          <div className="flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5" style={{ color }} />
+            <span className="text-sm">{resource.subject}</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "status",
+      label: "Statut",
+      sortable: true,
+      render: (resource) => <StatusBadge status={resource.status} />,
+    },
+    {
+      key: "isPaid",
+      label: "Prix",
+      sortable: false,
+      render: (resource) =>
+        resource.isPaid ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+            style={{
+              background: "oklch(0.95 0.025 155)",
+              color: "oklch(0.45 0.14 155)",
+            }}
+          >
+            {resource.price
+              ? `$${(resource.price / 100).toFixed(2)}`
+              : "Payant"}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Gratuit</span>
+        ),
+    },
+    {
+      key: "views",
+      label: "Vues",
+      sortable: true,
+      render: (resource) => (
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Eye className="h-3.5 w-3.5" />
+          {resource.views.toLocaleString()}
+        </div>
+      ),
+    },
+    {
+      key: "downloads",
+      label: "Télécharg.",
+      sortable: true,
+      render: (resource) => (
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Download className="h-3.5 w-3.5" />
+          {resource.downloads.toLocaleString()}
+        </div>
+      ),
+    },
+    {
+      key: "tags",
+      label: "Tags",
+      sortable: false,
+      render: (resource) => {
+        const tags = resource.tags;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{
+                  background: "oklch(0.94 0.008 80)",
+                  color: "oklch(0.48 0.02 250)",
+                }}
+              >
+                <Tag className="h-2.5 w-2.5" />
+                {tag}
+              </span>
+            ))}
+            {tags.length > 2 && (
+              <span className="text-[10px] text-muted-foreground self-center">
+                +{tags.length - 2}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "uploadedDate",
+      label: "Date",
+      sortable: true,
+      render: (resource) => (
+        <span className="text-sm text-muted-foreground">
+          {resource.uploadedDate}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      sortable: false,
+      render: (resource) => (
+        <ResourceActions
+          resource={resource}
+          onView={onView}
+          onArchive={onArchive}
+          onUnarchive={onUnarchive}
+        />
+      ),
+    },
+  ];
+}
 
 const filters = [
   {
     key: "status",
-    label: "Status",
+    label: "Statut",
     options: [
-      { label: "Published", value: "published" },
-      { label: "Draft", value: "draft" },
-      { label: "Archived", value: "archived" },
+      { label: "Publiée", value: "published" },
+      { label: "Brouillon", value: "draft" },
+      { label: "Archivée", value: "archived" },
     ],
   },
   {
@@ -319,15 +553,15 @@ const filters = [
     label: "Type",
     options: [
       { label: "Document", value: "document" },
-      { label: "Video", value: "video" },
+      { label: "Vidéo", value: "video" },
       { label: "Audio", value: "audio" },
       { label: "Image", value: "image" },
-      { label: "Other", value: "other" },
+      { label: "Autre", value: "other" },
     ],
   },
   {
     key: "subject",
-    label: "Subject",
+    label: "Matière",
     options: [
       { label: "Physics", value: "Physics" },
       { label: "Mathematics", value: "Mathematics" },
@@ -348,7 +582,7 @@ const defaultFormState: {
   status: ResourceStatus;
   tags: string;
   isPaid: boolean;
-  price: string; // string input, converted to cents on submit
+  price: string;
 } = {
   title: "",
   description: "",
@@ -360,21 +594,52 @@ const defaultFormState: {
   price: "",
 };
 
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div
+        className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl"
+        style={{ background: "oklch(0.95 0.018 155)" }}
+      >
+        <BookOpen
+          className="h-7 w-7"
+          style={{ color: "oklch(0.58 0.16 155)" }}
+        />
+      </div>
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 export default function ResourcesPage() {
+  const router = useRouter();
   const { data: resourcesData = [], isLoading } = useResources();
   const createResourceUpload = useCreateResourceUpload();
+  const archiveResource = useArchiveResource();
+  const updateResourceStatus = useUpdateResourceStatus();
   const { data: subjects = [] } = useQuery({
     queryKey: ["subjects"],
     queryFn: () => api.get<SubjectOption[]>("/subjects"),
   });
+
   const [modalOpen, setModalOpen] = useState(false);
+  const [viewResource, setViewResource] = useState<Resource | null>(null);
   const [form, setForm] = useState(defaultFormState);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const resources = resourcesData.map(adaptResource);
 
-  const publishedCount = resources.filter(
-    (r) => r.status === "published",
-  ).length;
+  const publishedResources = resources.filter((r) => r.status === "published");
+  const draftResources = resources.filter((r) => r.status === "draft");
+  const archivedResources = resources.filter((r) => r.status === "archived");
+
   const totalViews = resources.reduce((acc, r) => acc + r.views, 0);
   const totalDownloads = resources.reduce((acc, r) => acc + r.downloads, 0);
 
@@ -404,113 +669,233 @@ export default function ResourcesPage() {
     setModalOpen(false);
   };
 
+  const handleArchive = async (resource: Resource) => {
+    await archiveResource.mutateAsync(resource.id).catch(() => {});
+  };
+
+  const handleUnarchive = async (resource: Resource) => {
+    await updateResourceStatus
+      .mutateAsync({ id: resource.id, status: "published" })
+      .catch(() => {});
+  };
+
+  const columns = buildColumns(setViewResource, handleArchive, handleUnarchive);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
         <div>
-          <h1 className="text-base font-semibold text-foreground tracking-tight flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-base font-semibold text-foreground tracking-tight">
             <BookOpen className="h-4 w-4 text-muted-foreground" />
-            Resources
+            Ressources
           </h1>
           <p className="text-xs text-muted-foreground">
-            {resources.length} resources &middot; {publishedCount} published
+            {resources.length} ressources · {publishedResources.length} publiées
           </p>
         </div>
         <Button
           size="sm"
           className="gap-1.5 rounded-xl text-white"
-          style={{ background: "oklch(0.60 0.18 20)" }}
+          style={{ background: RESOURCE_COLOR }}
           onClick={() => setModalOpen(true)}
         >
           <Plus className="h-4 w-4" />
-          New Resource
+          Nouvelle ressource
         </Button>
       </header>
 
-      {/* Summary bar */}
-      <div className="flex items-center gap-4 border-b border-border/40 bg-background px-6 py-2.5">
-        {[
-          {
-            icon: Eye,
-            label: "Total views",
-            value: totalViews.toLocaleString(),
-            color: "oklch(0.52 0.14 250)",
-          },
-          {
-            icon: Download,
-            label: "Total downloads",
-            value: totalDownloads.toLocaleString(),
-            color: "oklch(0.58 0.16 155)",
-          },
-          {
-            icon: FileText,
-            label: "Drafts",
-            value: resources.filter((r) => r.status === "draft").length,
-            color: "oklch(0.52 0.14 80)",
-          },
-          {
-            icon: File,
-            label: "Archived",
-            value: resources.filter((r) => r.status === "archived").length,
-            color: "oklch(0.48 0.02 250)",
-          },
-        ]
-          .map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <div key={stat.label} className="flex items-center gap-1.5">
-                <Icon className="h-3.5 w-3.5" style={{ color: stat.color }} />
-                <span className="text-xs text-muted-foreground">
-                  {stat.label}:{" "}
-                  <strong className="text-foreground">{stat.value}</strong>
+      <div className="flex-1 overflow-y-auto">
+        <Tabs defaultValue="all" className="h-full">
+          <TabsList
+            variant="line"
+            className="w-full justify-start border-b border-border/60 rounded-none pb-0 h-auto bg-background px-6"
+          >
+            <TabsTrigger value="all" className="gap-1.5 pb-3">
+              Toutes les ressources
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.94 0.008 80)",
+                  color: "oklch(0.48 0.02 250)",
+                }}
+              >
+                {resources.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="published" className="gap-1.5 pb-3">
+              Publiées
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.95 0.018 155)",
+                  color: "oklch(0.38 0.12 155)",
+                }}
+              >
+                {publishedResources.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="draft" className="gap-1.5 pb-3">
+              Brouillons
+              <span
+                className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                style={{
+                  background: "oklch(0.95 0.03 80)",
+                  color: "oklch(0.52 0.14 80)",
+                }}
+              >
+                {draftResources.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="archived" className="gap-1.5 pb-3">
+              Archivées
+              {archivedResources.length > 0 && (
+                <span
+                  className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                  style={{
+                    background: "oklch(0.94 0.008 80)",
+                    color: "oklch(0.48 0.02 250)",
+                  }}
+                >
+                  {archivedResources.length}
                 </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="all" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            );
-          })
-          .reduce<React.ReactNode[]>((acc, el, i, arr) => {
-            acc.push(el);
-            if (i < arr.length - 1) {
-              acc.push(
-                <div key={`sep-${i}`} className="h-3.5 w-px bg-border/60" />,
-              );
-            }
-            return acc;
-          }, [])}
+            ) : resources.length === 0 ? (
+              <EmptyState
+                title="Aucune ressource"
+                description="Aucune ressource n'a encore été ajoutée."
+              />
+            ) : (
+              <DataTable
+                data={resources}
+                columns={columns}
+                filters={filters}
+                searchKeys={["title", "description", "subject"]}
+                itemsPerPage={8}
+                onRowClick={setViewResource}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="published" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : publishedResources.length === 0 ? (
+              <EmptyState
+                title="Aucune ressource publiée"
+                description="Aucune ressource publiée pour le moment."
+              />
+            ) : (
+              <DataTable
+                data={publishedResources}
+                columns={columns}
+                filters={filters}
+                searchKeys={["title", "description", "subject"]}
+                itemsPerPage={8}
+                onRowClick={setViewResource}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="draft" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : draftResources.length === 0 ? (
+              <EmptyState
+                title="Aucun brouillon"
+                description="Aucun brouillon pour le moment."
+              />
+            ) : (
+              <DataTable
+                data={draftResources}
+                columns={columns}
+                filters={filters}
+                searchKeys={["title", "description", "subject"]}
+                itemsPerPage={8}
+                onRowClick={setViewResource}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="archived" className="p-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : archivedResources.length === 0 ? (
+              <EmptyState
+                title="Aucune ressource archivée"
+                description="Aucune ressource archivée pour le moment."
+              />
+            ) : (
+              <DataTable
+                data={archivedResources}
+                columns={columns}
+                filters={filters}
+                searchKeys={["title", "description", "subject"]}
+                itemsPerPage={8}
+                onRowClick={setViewResource}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {isLoading ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">
-            Chargement des ressources…
-          </div>
-        ) : (
-          <DataTable
-            data={resources}
-            columns={columns}
-            filters={filters}
-            searchKeys={["title", "description", "subject", "uploadedBy"]}
-            itemsPerPage={8}
-          />
-        )}
-      </div>
+      <Modal
+        open={!!viewResource}
+        onOpenChange={(open) => !open && setViewResource(null)}
+        type="details"
+        title="Profil de la ressource"
+        description="Aperçu rapide — ouvrez le profil complet pour tous les détails."
+        size="md"
+        icon={null}
+        actions={{
+          primary: viewResource
+            ? {
+                label: "Ouvrir le profil complet",
+                onClick: () => {
+                  router.push(`/dashboard/resources/${viewResource.id}`);
+                },
+                icon: <ExternalLink className="h-3.5 w-3.5" />,
+              }
+            : undefined,
+          secondary: {
+            label: "Fermer",
+            onClick: () => setViewResource(null),
+            variant: "outline",
+          },
+        }}
+      >
+        {viewResource && <ResourceQuickView resource={viewResource} />}
+      </Modal>
 
-      {/* Add Resource Modal */}
       <Modal
         open={modalOpen}
         onOpenChange={setModalOpen}
         type="form"
-        title="Add New Resource"
-        description="Upload or register a new learning resource on the platform."
+        title="Ajouter une nouvelle ressource"
+        description="Téléchargez ou enregistrez une nouvelle ressource d'apprentissage."
         size="md"
         actions={{
           primary: {
-            label: "Add Resource",
+            label: createResourceUpload.isPending
+              ? "Ajout en cours..."
+              : "Ajouter la ressource",
             onClick: handleAdd,
           },
           secondary: {
-            label: "Cancel",
+            label: "Annuler",
             onClick: () => {
               setForm(defaultFormState);
               setSelectedFile(null);
@@ -522,10 +907,10 @@ export default function ResourcesPage() {
       >
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="res-title">Title</Label>
+            <Label htmlFor="res-title">Titre</Label>
             <Input
               id="res-title"
-              placeholder="e.g. Introduction to Graphic Design"
+              placeholder="ex. Introduction au Graphic Design"
               value={form.title}
               onChange={(e) =>
                 setForm((f) => ({ ...f, title: e.target.value }))
@@ -549,7 +934,7 @@ export default function ResourcesPage() {
             <Label htmlFor="res-description">Description</Label>
             <Input
               id="res-description"
-              placeholder="Brief description of this resource"
+              placeholder="Brève description de cette ressource"
               value={form.description}
               onChange={(e) =>
                 setForm((f) => ({ ...f, description: e.target.value }))
@@ -558,13 +943,13 @@ export default function ResourcesPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Subject</Label>
+              <Label>Matière</Label>
               <Select
                 value={form.subject}
                 onValueChange={(v) => setForm((f) => ({ ...f, subject: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select subject" />
+                  <SelectValue placeholder="Sélectionner une matière" />
                 </SelectTrigger>
                 <SelectContent>
                   {subjects.map((subject) => (
@@ -584,21 +969,21 @@ export default function ResourcesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
+                  <SelectValue placeholder="Sélectionner un type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="document">Document</SelectItem>
-                  <SelectItem value="video">Video</SelectItem>
+                  <SelectItem value="video">Vidéo</SelectItem>
                   <SelectItem value="audio">Audio</SelectItem>
                   <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="other">Autre</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Status</Label>
+              <Label>Statut</Label>
               <Select
                 value={form.status}
                 onValueChange={(v) =>
@@ -606,12 +991,12 @@ export default function ResourcesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
+                  <SelectValue placeholder="Sélectionner un statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
+                  <SelectItem value="published">Publiée</SelectItem>
+                  <SelectItem value="draft">Brouillon</SelectItem>
+                  <SelectItem value="archived">Archivée</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -619,7 +1004,7 @@ export default function ResourcesPage() {
               <Label htmlFor="res-tags">Tags</Label>
               <Input
                 id="res-tags"
-                placeholder="comma-separated: tag1, tag2"
+                placeholder="séparés par virgule: tag1, tag2"
                 value={form.tags}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, tags: e.target.value }))
@@ -638,18 +1023,18 @@ export default function ResourcesPage() {
               className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
             />
             <Label htmlFor="res-ispaid" className="cursor-pointer mb-0">
-              Paid resource
+              Ressource payante
             </Label>
           </div>
           {form.isPaid && (
             <div className="space-y-1.5">
-              <Label htmlFor="res-price">Price (CAD)</Label>
+              <Label htmlFor="res-price">Prix (CAD)</Label>
               <Input
                 id="res-price"
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="e.g. 9.99"
+                placeholder="ex. 9.99"
                 value={form.price}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, price: e.target.value }))
@@ -659,7 +1044,7 @@ export default function ResourcesPage() {
           )}
           {createResourceUpload.isError && (
             <p className="text-xs text-destructive">
-              Impossible d&apos;uploader la ressource.
+              Impossible d&apos;ajouter la ressource.
             </p>
           )}
         </div>
