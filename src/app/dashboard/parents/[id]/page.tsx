@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { PaymentStatusBadge, StatusBadge } from "@/components/ui/status-badge";
 import {
-  PARENT_COLOR,
-  formatCurrency,
-  getParentInitials,
-  getPlanById,
-  mockParents,
-} from "@/lib/data/parents";
-import { mockStudents } from "@/lib/data/students";
-import { Parent } from "@/types";
+  useActivateParent,
+  useDeactivateParent,
+  useParentDetail,
+  useParentOrders,
+  useSuspendParent,
+} from "@/hooks/parents";
+import type { AdminParent } from "@/hooks/parents/api";
+import { useStudents } from "@/hooks/students";
+import { formatCurrency } from "@/lib/utils";
+import { Parent, PlanId } from "@/types";
 import {
   ArrowLeft,
   Baby,
@@ -31,7 +33,106 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use, useState } from "react";
 
+const PARENT_COLOR = "oklch(0.52 0.14 250)";
+
+function getParentInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+const PLAN_META: Record<
+  PlanId,
+  {
+    name: string;
+    color: string;
+    price: number;
+    description: string;
+    maxChildren: number | null;
+    resourceAccess: boolean;
+    prioritySupport: boolean;
+  }
+> = {
+  starter: {
+    name: "Starter",
+    color: "oklch(0.58 0.16 155)",
+    price: 29,
+    description: "Plan d'entrée pour un enfant.",
+    maxChildren: 1,
+    resourceAccess: true,
+    prioritySupport: false,
+  },
+  family: {
+    name: "Family",
+    color: "oklch(0.62 0.16 80)",
+    price: 59,
+    description: "Plan famille avec plus de flexibilité.",
+    maxChildren: 3,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+  premium: {
+    name: "Premium",
+    color: "oklch(0.52 0.14 250)",
+    price: 89,
+    description: "Plan avancé avec support prioritaire.",
+    maxChildren: null,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+  custom: {
+    name: "Custom",
+    color: "oklch(0.68 0.18 20)",
+    price: 0,
+    description: "Plan personnalisé selon les besoins.",
+    maxChildren: null,
+    resourceAccess: true,
+    prioritySupport: true,
+  },
+};
+
+function getPlanMeta(planId?: PlanId) {
+  return planId ? PLAN_META[planId] : undefined;
+}
+
+function adaptParent(parent: AdminParent): Parent {
+  const normalizedStatus = String(parent.user?.status ?? "").toUpperCase();
+  const status =
+    normalizedStatus === "ACTIVE"
+      ? "active"
+      : normalizedStatus === "SUSPENDED"
+        ? "suspended"
+        : "inactive";
+  const knownPlanId = parent.planId as PlanId | null;
+  const isKnownPlan = knownPlanId && knownPlanId in PLAN_META;
+
+  return {
+    id: parent.id,
+    name: `${parent.firstName} ${parent.lastName}`.trim(),
+    email: parent.user.email,
+    phone: "—",
+    location: "—",
+    status,
+    children: parent.children.map((child) => ({
+      name: child.name,
+      age: 0,
+      grade: child.grade,
+    })),
+    paymentStatus: parent.paymentStatus,
+    joinedDate: new Date(parent.user.createdAt).toLocaleDateString("fr-FR", {
+      month: "short",
+      year: "numeric",
+    }),
+    planId: isKnownPlan ? knownPlanId : undefined,
+    notes: parent.notes ?? "",
+    totalPayments: parent.totalPayments,
+    monthlyFee: parent.monthlyFee ?? undefined,
+  };
+}
 
 function StatCard({
   icon: Icon,
@@ -73,37 +174,36 @@ export default function ParentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [parents, setParents] = useState<Parent[]>(mockParents);
+  const { data: parentData, isLoading } = useParentDetail(id);
+  const { data: studentsData = [] } = useStudents();
+  const { data: ordersData = [] } = useParentOrders(id);
+  const activateParent = useActivateParent();
+  const deactivateParent = useDeactivateParent();
+  const suspendParent = useSuspendParent();
   const [confirmAction, setConfirmAction] = useState<
     "suspend" | "activate" | "deactivate" | null
   >(null);
+  if (!isLoading && !parentData) notFound();
+  if (!parentData) {
+    return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+  }
 
-  const parent = parents.find((p) => p.id === id);
-  if (!parent) notFound();
+  const currentParent = adaptParent(parentData);
+  const initials = getParentInitials(currentParent.name);
+  const plan = getPlanMeta(currentParent.planId);
 
-  const initials = getParentInitials(parent.name);
-
-  const currentParent = parents.find((p) => p.id === id) ?? parent;
-  const plan = currentParent.planId ? getPlanById(currentParent.planId) : null;
-
-  const handleActivate = () => {
-    setParents((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "active" } : p)),
-    );
+  const handleActivate = async () => {
+    await activateParent.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleDeactivate = () => {
-    setParents((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "inactive" } : p)),
-    );
+  const handleDeactivate = async () => {
+    await deactivateParent.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleSuspend = () => {
-    setParents((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: "suspended" } : p)),
-    );
+  const handleSuspend = async () => {
+    await suspendParent.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
@@ -214,9 +314,9 @@ export default function ParentDetailPage({
                   { icon: Mail, label: currentParent.email },
                   { icon: Phone, label: currentParent.phone },
                   { icon: MapPin, label: currentParent.location },
-                ].map(({ icon: Icon, label }) => (
+                ].map(({ icon: Icon, label }, index) => (
                   <div
-                    key={label}
+                    key={`${label}-${index}`}
                     className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-foreground/70"
                   >
                     <Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -305,10 +405,10 @@ export default function ParentDetailPage({
                 </h2>
                 {currentParent.children.length > 0 ? (
                   <div className="space-y-3">
-                    {currentParent.children.map((child) => {
+                    {currentParent.children.map((child, index) => {
                       const childInitials = getParentInitials(child.name);
-                      const student = mockStudents.find(
-                        (s) => s.name === child.name,
+                      const student = studentsData.find(
+                        (s) => s.name === child.name && s.parent.id === id,
                       );
                       const inner = (
                         <>
@@ -333,7 +433,7 @@ export default function ParentDetailPage({
                       );
                       return student ? (
                         <Link
-                          key={child.name}
+                          key={`${child.name}-${index}`}
                           href={`/dashboard/students/${student.id}`}
                           className="flex items-center gap-4 rounded-xl border border-border/50 px-4 py-3 transition-colors hover:bg-muted/40"
                           style={{ background: `${PARENT_COLOR}06` }}
@@ -342,7 +442,7 @@ export default function ParentDetailPage({
                         </Link>
                       ) : (
                         <div
-                          key={child.name}
+                          key={`${child.name}-${index}`}
                           className="flex items-center gap-4 rounded-xl border border-border/50 px-4 py-3"
                           style={{ background: `${PARENT_COLOR}06` }}
                         >
@@ -492,53 +592,85 @@ export default function ParentDetailPage({
                   Paiements
                 </h2>
                 <div className="space-y-3">
-                  {[
-                    {
-                      label: "Statut actuel",
-                      value: (
-                        <PaymentStatusBadge
-                          status={currentParent.paymentStatus}
-                        />
-                      ),
-                    },
-                    {
-                      label: "Dernier paiement",
-                      value: currentParent.lastPaymentDate ?? "—",
-                    },
-                    {
-                      label: "Prochain paiement",
-                      value: currentParent.nextPaymentDate ?? "—",
-                    },
-                    {
-                      label: "Frais mensuels",
-                      value: currentParent.monthlyFee
-                        ? formatCurrency(currentParent.monthlyFee)
-                        : "—",
-                    },
-                    {
-                      label: "Total versé",
-                      value: currentParent.totalPayments
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">
+                      Statut actuel
+                    </span>
+                    <PaymentStatusBadge status={currentParent.paymentStatus} />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs text-muted-foreground">
+                      Total versé
+                    </span>
+                    <span className="text-xs font-medium text-foreground">
+                      {currentParent.totalPayments
                         ? formatCurrency(currentParent.totalPayments)
-                        : "—",
-                    },
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-4"
-                    >
-                      <span className="text-xs text-muted-foreground">
-                        {label}
-                      </span>
-                      {typeof value === "string" ? (
-                        <span className="text-xs font-medium text-foreground text-right">
-                          {value}
-                        </span>
-                      ) : (
-                        value
-                      )}
-                    </div>
-                  ))}
+                        : "—"}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Real orders from Stripe */}
+                {ordersData.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                      Historique des commandes
+                    </p>
+                    {ordersData.slice(0, 5).map((order) => {
+                      const statusColors: Record<
+                        string,
+                        { bg: string; color: string }
+                      > = {
+                        PAID: {
+                          bg: "oklch(0.95 0.018 155)",
+                          color: "oklch(0.45 0.14 155)",
+                        },
+                        PENDING: {
+                          bg: "oklch(0.96 0.03 80)",
+                          color: "oklch(0.55 0.16 80)",
+                        },
+                        FAILED: {
+                          bg: "oklch(0.94 0.008 20)",
+                          color: "oklch(0.45 0.12 20)",
+                        },
+                        REFUNDED: {
+                          bg: "oklch(0.95 0.02 250)",
+                          color: "oklch(0.52 0.14 250)",
+                        },
+                        CANCELLED: {
+                          bg: "oklch(0.94 0.005 250)",
+                          color: "oklch(0.48 0.02 250)",
+                        },
+                      };
+                      const style =
+                        statusColors[order.status] ?? statusColors.PENDING;
+                      return (
+                        <div
+                          key={order.id}
+                          className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">
+                              {order.type} —{" "}
+                              {formatCurrency(order.amount / 100)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {new Date(order.createdAt).toLocaleDateString(
+                                "fr-FR",
+                              )}
+                            </p>
+                          </div>
+                          <span
+                            className="ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{ background: style.bg, color: style.color }}
+                          >
+                            {order.status}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Account info */}
@@ -562,9 +694,9 @@ export default function ParentDetailPage({
                           ? "Inactif"
                           : "Suspendu",
                   },
-                ].map(({ label, value }) => (
+                ].map(({ label, value }, index) => (
                   <div
-                    key={label}
+                    key={`${label}-${index}`}
                     className="flex items-start justify-between gap-4"
                   >
                     <span className="text-xs text-muted-foreground">

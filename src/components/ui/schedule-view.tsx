@@ -1074,8 +1074,11 @@ function WeekStats({ sessions }: { sessions: ScheduleSession[] }) {
         Récapitulatif
       </h3>
       <div className="space-y-1.5">
-        {rows.map(({ label, value, color }) => (
-          <div key={label} className="flex items-center justify-between gap-2">
+        {rows.map(({ label, value, color }, index) => (
+          <div
+            key={`${label}-${index}`}
+            className="flex items-center justify-between gap-2"
+          >
             <span className="text-[11px] text-muted-foreground leading-none">
               {label}
             </span>
@@ -1115,8 +1118,8 @@ function Legend() {
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-      {items.map(([icon, label]) => (
-        <span key={label} className="flex items-center gap-1">
+      {items.map(([icon, label], index) => (
+        <span key={`${label}-${index}`} className="flex items-center gap-1">
           {icon}
           {label}
         </span>

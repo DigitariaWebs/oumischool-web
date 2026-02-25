@@ -1,4 +1,5 @@
 import "./globals.css";
+import { Providers } from "./providers";
 import type { Metadata } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
 
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={`${dmSans.variable} ${fraunces.variable} antialiased`}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

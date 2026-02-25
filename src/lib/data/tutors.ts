@@ -29,7 +29,7 @@ export function getSubjectColor(id: string): string {
 }
 
 export function getSubjectName(id: string): string {
-  return getSubjectById(id)?.name ?? id;
+  return getSubjectById(id)?.name ?? "Cours planifié";
 }
 
 /** @deprecated use subjectIds + mockSubjects */

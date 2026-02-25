@@ -257,12 +257,15 @@ export interface Resource {
   type: ResourceType;
   subject: string;
   status: ResourceStatus;
+  fileUrl?: string | null;
   views: number;
   downloads: number;
   uploadedBy: string;
   uploadedDate: string;
   fileSize: string;
   tags: string[];
+  isPaid?: boolean;
+  price?: number | null; // in cents
 }
 
 export interface StatusStyle {

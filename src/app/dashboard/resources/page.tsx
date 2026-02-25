@@ -14,7 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useCreateResourceUpload, useResources } from "@/hooks/resources";
+import type { AdminResource } from "@/hooks/resources/api";
+import { api } from "@/lib/api-client";
 import { Resource, ResourceStatus, ResourceType } from "@/types";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   Plus,
@@ -26,153 +30,63 @@ import {
   Eye,
   Download,
   Tag,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 
-const mockResources: Resource[] = [
-  {
-    id: "r1",
-    title: "Introduction to Graphic Design",
-    description: "Foundational principles of graphic design for beginners.",
-    type: "document",
-    subject: "Graphic Design",
-    status: "published",
-    views: 1240,
-    downloads: 388,
-    uploadedBy: "Nina Roussel",
-    uploadedDate: "Jan 2024",
-    fileSize: "4.2 MB",
-    tags: ["beginner", "design", "theory"],
-  },
-  {
-    id: "r2",
-    title: "Typography Fundamentals",
-    description:
-      "Everything you need to know about fonts, kerning, and layout.",
-    type: "document",
-    subject: "Typography",
-    status: "published",
-    views: 980,
-    downloads: 275,
-    uploadedBy: "Karim Zerrouk",
-    uploadedDate: "Feb 2024",
-    fileSize: "2.8 MB",
-    tags: ["fonts", "layout", "intermediate"],
-  },
-  {
-    id: "r3",
-    title: "Color Theory — Principles & Elements",
-    description: "Understanding color wheels, harmony, and contrast.",
-    type: "document",
-    subject: "Colors & Elements",
-    status: "published",
-    views: 1540,
-    downloads: 490,
-    uploadedBy: "Leila Mansouri",
-    uploadedDate: "Jan 2024",
-    fileSize: "6.1 MB",
-    tags: ["colors", "theory", "beginner"],
-  },
-  {
-    id: "r4",
-    title: "UI/UX Design Crash Course",
-    description: "Hands-on walkthrough of user interface design concepts.",
-    type: "video",
-    subject: "UI/UX Design",
-    status: "published",
-    views: 3200,
-    downloads: 820,
-    uploadedBy: "Sara Benali",
-    uploadedDate: "Mar 2024",
-    fileSize: "1.2 GB",
-    tags: ["ui", "ux", "video", "intermediate"],
-  },
-  {
-    id: "r5",
-    title: "Basic 3D Modeling Techniques",
-    description: "An audio lecture series on beginner 3D modeling.",
-    type: "audio",
-    subject: "3D Objects",
-    status: "published",
-    views: 640,
-    downloads: 120,
-    uploadedBy: "Yacine Boudali",
-    uploadedDate: "Apr 2024",
-    fileSize: "88 MB",
-    tags: ["3d", "audio", "lecture"],
-  },
-  {
-    id: "r6",
-    title: "Physics — Motion & Forces",
-    description: "Chapter 3 notes covering Newton&apos;s laws and kinematics.",
-    type: "document",
-    subject: "Physics",
-    status: "published",
-    views: 760,
-    downloads: 310,
-    uploadedBy: "Aalvina Fatehi",
-    uploadedDate: "Nov 2023",
-    fileSize: "1.4 MB",
-    tags: ["physics", "notes", "grade-8"],
-  },
-  {
-    id: "r7",
-    title: "Advanced Algebra Workbook",
-    description: "Practice problems and solutions for Grade 9 algebra.",
-    type: "document",
-    subject: "Mathematics",
-    status: "draft",
-    views: 0,
-    downloads: 0,
-    uploadedBy: "Omar Hadj",
-    uploadedDate: "May 2025",
-    fileSize: "3.0 MB",
-    tags: ["algebra", "practice", "grade-9"],
-  },
-  {
-    id: "r8",
-    title: "Design Asset Pack — Icons & Illustrations",
-    description:
-      "A curated set of icons and illustrations for design students.",
-    type: "image",
-    subject: "Graphic Design",
-    status: "published",
-    views: 2100,
-    downloads: 950,
-    uploadedBy: "Sara Benali",
-    uploadedDate: "Feb 2024",
-    fileSize: "45 MB",
-    tags: ["assets", "icons", "illustrations"],
-  },
-  {
-    id: "r9",
-    title: "History of Physics — Lecture Slides",
-    description: "Slide deck covering major historical milestones in physics.",
-    type: "document",
-    subject: "Physics",
-    status: "archived",
-    views: 420,
-    downloads: 90,
-    uploadedBy: "Aalvina Fatehi",
-    uploadedDate: "Sep 2023",
-    fileSize: "8.5 MB",
-    tags: ["history", "slides", "lecture"],
-  },
-  {
-    id: "r10",
-    title: "Geometry — Shapes & Theorems",
-    description: "Comprehensive guide to geometric shapes, angles, and proofs.",
-    type: "document",
-    subject: "Mathematics",
-    status: "published",
-    views: 880,
-    downloads: 230,
-    uploadedBy: "Mariam Khoury",
-    uploadedDate: "Dec 2023",
-    fileSize: "2.2 MB",
-    tags: ["geometry", "grade-6", "proofs"],
-  },
-];
+interface SubjectOption {
+  id: string;
+  name: string;
+}
+
+function normalizeStatus(status: unknown): ResourceStatus {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "PUBLISHED") return "published";
+  if (normalized === "ARCHIVED") return "archived";
+  return "draft";
+}
+
+function normalizeType(type: unknown): ResourceType {
+  const normalized = String(type ?? "").toLowerCase();
+  if (normalized === "video") return "video";
+  if (normalized === "audio") return "audio";
+  if (normalized === "image") return "image";
+  if (normalized === "document") return "document";
+  return "other";
+}
+
+function resolveApiResourceUrl(fileUrl: string | null | undefined): string {
+  const raw = typeof fileUrl === "string" ? fileUrl.trim() : "";
+  if (!raw) return "";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  const base = (
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  ).replace(/\/+$/, "");
+  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+}
+
+function adaptResource(resource: AdminResource): Resource {
+  return {
+    id: resource.id,
+    title: resource.title,
+    description: resource.description ?? "",
+    type: normalizeType(resource.type),
+    subject: resource.subject,
+    status: normalizeStatus(resource.status),
+    fileUrl: resource.fileUrl,
+    views: resource.views,
+    downloads: resource.downloads,
+    uploadedBy: resource.uploader?.email ?? "—",
+    uploadedDate: new Date(resource.createdAt).toLocaleDateString("fr-FR", {
+      month: "short",
+      year: "numeric",
+    }),
+    fileSize: resource.fileSize ?? "—",
+    tags: resource.tags,
+    isPaid: resource.isPaid ?? false,
+    price: resource.price ?? null,
+  };
+}
 
 const typeIcons: Record<
   Resource["type"],
@@ -266,6 +180,47 @@ const columns: ColumnDef<Resource>[] = [
     label: "Status",
     sortable: true,
     render: (resource) => <StatusBadge status={resource.status} />,
+  },
+  {
+    key: "isPaid",
+    label: "Price",
+    sortable: false,
+    render: (resource) =>
+      resource.isPaid ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+          style={{
+            background: "oklch(0.95 0.025 155)",
+            color: "oklch(0.45 0.14 155)",
+          }}
+        >
+          {resource.price ? `$${(resource.price / 100).toFixed(2)}` : "Paid"}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">Free</span>
+      ),
+  },
+  {
+    key: "actions",
+    label: "File",
+    sortable: false,
+    render: (resource) => {
+      const url = resolveApiResourceUrl(resource.fileUrl);
+      if (!url) {
+        return <span className="text-xs text-muted-foreground">No file</span>;
+      }
+      return (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Open
+        </a>
+      );
+    },
   },
   {
     key: "views",
@@ -391,24 +346,31 @@ const defaultFormState: {
   subject: string;
   type: ResourceType;
   status: ResourceStatus;
-  fileSize: string;
-  uploadedBy: string;
   tags: string;
+  isPaid: boolean;
+  price: string; // string input, converted to cents on submit
 } = {
   title: "",
   description: "",
   subject: "",
   type: "document",
   status: "draft",
-  fileSize: "",
-  uploadedBy: "",
   tags: "",
+  isPaid: false,
+  price: "",
 };
 
 export default function ResourcesPage() {
-  const [resources, setResources] = useState<Resource[]>(mockResources);
+  const { data: resourcesData = [], isLoading } = useResources();
+  const createResourceUpload = useCreateResourceUpload();
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => api.get<SubjectOption[]>("/subjects"),
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(defaultFormState);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const resources = resourcesData.map(adaptResource);
 
   const publishedCount = resources.filter(
     (r) => r.status === "published",
@@ -416,32 +378,29 @@ export default function ResourcesPage() {
   const totalViews = resources.reduce((acc, r) => acc + r.views, 0);
   const totalDownloads = resources.reduce((acc, r) => acc + r.downloads, 0);
 
-  const handleAdd = () => {
-    if (!form.title || !form.subject) return;
-    const newResource: Resource = {
-      id: `r${Date.now()}`,
-      title: form.title,
-      description: form.description,
-      type: form.type,
-      subject: form.subject,
-      status: form.status,
-      views: 0,
-      downloads: 0,
-      uploadedBy: form.uploadedBy || "Admin",
-      uploadedDate: new Date().toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      fileSize: form.fileSize || "—",
-      tags: form.tags
-        ? form.tags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
-        : [],
-    };
-    setResources((prev) => [newResource, ...prev]);
+  const handleAdd = async () => {
+    if (!form.title || !form.subject || !selectedFile) return;
+    const payload = new FormData();
+    payload.append("title", form.title);
+    payload.append("subject", form.subject);
+    payload.append("type", form.type);
+    payload.append("status", form.status.toUpperCase());
+    if (form.description) payload.append("description", form.description);
+    if (form.tags) payload.append("tags", form.tags);
+    if (form.isPaid) {
+      payload.append("isPaid", "true");
+      if (form.price) {
+        payload.append(
+          "price",
+          String(Math.round(parseFloat(form.price) * 100)),
+        );
+      }
+    }
+    payload.append("file", selectedFile);
+
+    await createResourceUpload.mutateAsync(payload);
     setForm(defaultFormState);
+    setSelectedFile(null);
     setModalOpen(false);
   };
 
@@ -522,13 +481,19 @@ export default function ResourcesPage() {
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto p-6">
-        <DataTable
-          data={resources}
-          columns={columns}
-          filters={filters}
-          searchKeys={["title", "description", "subject", "uploadedBy"]}
-          itemsPerPage={8}
-        />
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            Chargement des ressources…
+          </div>
+        ) : (
+          <DataTable
+            data={resources}
+            columns={columns}
+            filters={filters}
+            searchKeys={["title", "description", "subject", "uploadedBy"]}
+            itemsPerPage={8}
+          />
+        )}
       </div>
 
       {/* Add Resource Modal */}
@@ -548,6 +513,7 @@ export default function ResourcesPage() {
             label: "Cancel",
             onClick: () => {
               setForm(defaultFormState);
+              setSelectedFile(null);
               setModalOpen(false);
             },
             variant: "outline",
@@ -565,6 +531,19 @@ export default function ResourcesPage() {
                 setForm((f) => ({ ...f, title: e.target.value }))
               }
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="res-file">Fichier</Label>
+            <Input
+              id="res-file"
+              type="file"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+            />
+            {selectedFile ? (
+              <p className="text-xs text-muted-foreground">
+                {selectedFile.name} ({Math.ceil(selectedFile.size / 1024)} KB)
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="res-description">Description</Label>
@@ -588,17 +567,9 @@ export default function ResourcesPage() {
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
                 <SelectContent>
-                  {[
-                    "Physics",
-                    "Mathematics",
-                    "UI/UX Design",
-                    "Graphic Design",
-                    "Typography",
-                    "3D Objects",
-                    "Colors & Elements",
-                  ].map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
+                  {subjects.map((subject) => (
+                    <SelectItem key={subject.id} value={subject.name}>
+                      {subject.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -645,30 +616,6 @@ export default function ResourcesPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="res-filesize">File Size</Label>
-              <Input
-                id="res-filesize"
-                placeholder="e.g. 4.2 MB"
-                value={form.fileSize}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, fileSize: e.target.value }))
-                }
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="res-uploaded-by">Uploaded By</Label>
-              <Input
-                id="res-uploaded-by"
-                placeholder="Tutor name"
-                value={form.uploadedBy}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, uploadedBy: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="res-tags">Tags</Label>
               <Input
                 id="res-tags"
@@ -680,6 +627,41 @@ export default function ResourcesPage() {
               />
             </div>
           </div>
+          <div className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2.5">
+            <input
+              id="res-ispaid"
+              type="checkbox"
+              checked={form.isPaid}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, isPaid: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+            />
+            <Label htmlFor="res-ispaid" className="cursor-pointer mb-0">
+              Paid resource
+            </Label>
+          </div>
+          {form.isPaid && (
+            <div className="space-y-1.5">
+              <Label htmlFor="res-price">Price (CAD)</Label>
+              <Input
+                id="res-price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 9.99"
+                value={form.price}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, price: e.target.value }))
+                }
+              />
+            </div>
+          )}
+          {createResourceUpload.isError && (
+            <p className="text-xs text-destructive">
+              Impossible d&apos;uploader la ressource.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

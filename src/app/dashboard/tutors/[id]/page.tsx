@@ -6,17 +6,25 @@ import { ScheduleView } from "@/components/ui/schedule-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  getSubjectColor,
-  getSubjectName,
-  mockLessons,
-  mockLessonSeries,
-  mockSubjects,
-  mockTutors,
-  mockSchedules,
-} from "@/lib/data/tutors";
+  useApproveTutor,
+  useDeactivateTutor,
+  useRejectTutor,
+  useTutorDetail,
+  useTutorLessons,
+  useTutorRevenue,
+  useTutorRevenueBreakdown,
+} from "@/hooks/tutors";
+import type { AdminTutorDetail } from "@/hooks/tutors/api";
 import { formatCurrency } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settings";
-import { Tutor, TutorResource, TutorRevenue } from "@/types";
+import {
+  Lesson,
+  LessonSeries,
+  Tutor,
+  TutorResource,
+  TutorRevenue,
+  TutorSchedule,
+} from "@/types";
 import {
   ArrowLeft,
   Award,
@@ -48,7 +56,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { use, useState } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,20 +77,363 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   );
 }
 
+function getSubjectColor(id?: string | null): string {
+  const key = String(id ?? "").toLowerCase();
+  if (key.includes("math")) return "oklch(0.52 0.14 250)";
+  if (key.includes("fr")) return "oklch(0.58 0.16 155)";
+  if (key.includes("science")) return "oklch(0.62 0.16 80)";
+  if (key.includes("english")) return "oklch(0.68 0.18 20)";
+  return "oklch(0.58 0.16 155)";
+}
+
+function getSubjectName(id?: string | null): string {
+  const value = String(id ?? "").trim();
+  if (!value) return "Matière";
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatDateLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("fr-FR");
+}
+
+function formatAvailabilitySummary(
+  availability: TutorSchedule["availability"],
+  fallback: string,
+): string {
+  if (!availability.length) return fallback;
+  const days = Array.from(new Set(availability.map((slot) => slot.day))).sort(
+    (a, b) => a - b,
+  );
+  const ranges = availability.map((slot) => ({
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+  }));
+  const first = ranges[0];
+  const singleRange = ranges.every(
+    (slot) =>
+      slot.startTime === first.startTime && slot.endTime === first.endTime,
+  );
+  if (days.length === 1) {
+    return `Jour ${days[0]} • ${first.startTime}-${first.endTime}`;
+  }
+  if (singleRange) {
+    return `${days.length} jours/semaine • ${first.startTime}-${first.endTime}`;
+  }
+  return `${days.length} jours/semaine`;
+}
+
+function normalizeLessonsFromDetail(
+  tutorId: string,
+  seriesInput: unknown[],
+): { series: LessonSeries[]; lessons: Lesson[] } {
+  const series: LessonSeries[] = [];
+  const lessons: Lesson[] = [];
+
+  for (const rawSeries of seriesInput) {
+    if (!isRecord(rawSeries)) continue;
+    const seriesId = asString(rawSeries.id);
+    if (!seriesId) continue;
+    const subjectId = asString(rawSeries.subjectId);
+    series.push({
+      id: seriesId,
+      tutorId,
+      subjectId,
+      title: asString(rawSeries.title, "Série"),
+      description: asString(rawSeries.description, undefined),
+    });
+
+    const rawLessons = Array.isArray(rawSeries.lessons)
+      ? rawSeries.lessons
+      : [];
+    rawLessons.forEach((rawLesson, index) => {
+      if (!isRecord(rawLesson)) return;
+      const lessonId = asString(rawLesson.id);
+      if (!lessonId) return;
+      const rawMaterials = Array.isArray(rawLesson.materials)
+        ? rawLesson.materials
+        : [];
+      lessons.push({
+        id: lessonId,
+        tutorId,
+        subjectId: asString(rawLesson.subjectId, subjectId),
+        seriesId,
+        title: asString(rawLesson.title, "Leçon"),
+        description: asString(rawLesson.description, undefined),
+        duration: asString(rawLesson.duration, "—"),
+        orderInSeries: asNumber(rawLesson.orderInSeries, index + 1),
+        materials: rawMaterials
+          .filter(isRecord)
+          .map((material, materialIndex) => ({
+            id: asString(material.id, `${lessonId}-m-${materialIndex}`),
+            title: asString(material.title, "Support"),
+            soldSeparately: material.soldSeparately === true,
+          })),
+      });
+    });
+  }
+
+  return { series, lessons };
+}
+
+function normalizeLessonsFromApi(
+  tutorId: string,
+  payload: unknown,
+): { series: LessonSeries[]; lessons: Lesson[] } {
+  if (!Array.isArray(payload)) return { series: [], lessons: [] };
+  return normalizeLessonsFromDetail(tutorId, payload);
+}
+
+function normalizeResources(
+  tutorId: string,
+  payload: unknown[],
+): TutorResource[] {
+  const resources: TutorResource[] = [];
+  payload.forEach((rawResource, index) => {
+    if (!isRecord(rawResource)) return;
+    const id = asString(rawResource.id, `${tutorId}-resource-${index}`);
+    const statusRaw = asString(rawResource.status).toLowerCase();
+    const typeRaw = asString(rawResource.type).toLowerCase();
+    const status: TutorResource["status"] =
+      statusRaw === "published"
+        ? "published"
+        : statusRaw === "archived"
+          ? "archived"
+          : "draft";
+    const type: TutorResource["type"] =
+      typeRaw === "video" ||
+      typeRaw === "audio" ||
+      typeRaw === "image" ||
+      typeRaw === "other"
+        ? typeRaw
+        : "document";
+    resources.push({
+      id,
+      tutorId,
+      title: asString(rawResource.title, "Ressource"),
+      description: asString(rawResource.description, undefined),
+      type,
+      status,
+      subjectId: asString(rawResource.subject, undefined),
+      fileSize: asString(rawResource.fileSize, "—"),
+      views: asNumber(rawResource.views),
+      downloads: asNumber(rawResource.downloads),
+      uploadedDate: formatDateLabel(asString(rawResource.createdAt, "")),
+    });
+  });
+  return resources;
+}
+
+function normalizeSchedule(
+  tutorId: string,
+  sessionsInput: unknown[],
+  availabilityInput: unknown[],
+): TutorSchedule | undefined {
+  const availability = availabilityInput.filter(isRecord).map((slot) => ({
+    day: asNumber(slot.dayOfWeek, 0),
+    startTime: asString(slot.startTime, "09:00"),
+    endTime: asString(slot.endTime, "17:00"),
+  }));
+
+  const sessions = sessionsInput
+    .filter(isRecord)
+    .map((session) => {
+      const start = new Date(asString(session.startTime));
+      const end = new Date(asString(session.endTime));
+      const statusRaw = asString(session.status).toUpperCase();
+      const status: "scheduled" | "completed" | "cancelled" =
+        statusRaw === "COMPLETED"
+          ? "completed"
+          : statusRaw === "CANCELLED" || statusRaw === "REJECTED"
+            ? "cancelled"
+            : "scheduled";
+      return {
+        id: asString(session.id),
+        tutorId,
+        subjectId: asString(session.subjectId),
+        title: asString(session.subjectId, "Cours"),
+        day: Number.isNaN(start.getTime()) ? 0 : start.getDay(),
+        startTime: Number.isNaN(start.getTime())
+          ? "09:00"
+          : `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+        endTime: Number.isNaN(end.getTime())
+          ? "10:00"
+          : `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`,
+        mode: "online" as const,
+        type: "individual" as const,
+        status,
+        students: [],
+        recurringWeekly: true,
+        date: Number.isNaN(start.getTime())
+          ? undefined
+          : start.toISOString().slice(0, 10),
+        pricePerStudent:
+          typeof session.price === "number" && Number.isFinite(session.price)
+            ? session.price
+            : undefined,
+      };
+    })
+    .filter((session) => !!session.id);
+
+  if (!availability.length && !sessions.length) return undefined;
+  return { tutorId, availability, sessions };
+}
+
+function normalizeRevenue(
+  summaryInput: unknown,
+  breakdownInput: unknown,
+): TutorRevenue | undefined {
+  if (!isRecord(summaryInput) || !isRecord(breakdownInput)) return undefined;
+  const totals = isRecord(breakdownInput.totals) ? breakdownInput.totals : {};
+  const bySubjectRaw = Array.isArray(breakdownInput.bySubject)
+    ? breakdownInput.bySubject
+    : [];
+
+  const bySubject: TutorRevenue["bySubject"] = bySubjectRaw
+    .filter(isRecord)
+    .map((subject) => {
+      const seriesRaw = Array.isArray(subject.bySeries) ? subject.bySeries : [];
+      const series = seriesRaw.filter(isRecord).map((seriesItem) => {
+        const lessonsRaw = Array.isArray(seriesItem.byLesson)
+          ? seriesItem.byLesson
+          : [];
+        return {
+          seriesId: asString(seriesItem.seriesId),
+          amount: asNumber(seriesItem.gross),
+          sales: asNumber(seriesItem.count),
+          lessons: lessonsRaw.filter(isRecord).map((lesson) => ({
+            lessonId: asString(lesson.lessonId),
+            amount: asNumber(lesson.gross),
+            sales: asNumber(lesson.count),
+          })),
+        };
+      });
+      const standaloneLessons = series
+        .filter((seriesItem) => !seriesItem.seriesId)
+        .flatMap((seriesItem) => seriesItem.lessons);
+      return {
+        subjectId: asString(subject.subjectId),
+        amount: asNumber(subject.gross),
+        standaloneAmount: standaloneLessons.reduce(
+          (sum, lesson) => sum + lesson.amount,
+          0,
+        ),
+        series: series.filter((seriesItem) => !!seriesItem.seriesId),
+        standaloneLessons,
+      };
+    });
+
+  return {
+    total: asNumber(totals.gross),
+    bySubject,
+    recurringSessions: [],
+  };
+}
+
+function createTutorFromDetail(
+  detail: AdminTutorDetail,
+  fallback?: Tutor,
+): Tutor {
+  const subjectIds = asStringArray(detail.subjects);
+  const languages = asStringArray(detail.languages);
+  const qualifications = asStringArray(detail.qualifications);
+  const email = asString(detail.user?.email, "tutor@unknown");
+  const seed = fallback ?? {
+    id: detail.id,
+    name: email.split("@")[0] || "Tutor",
+    email,
+    phone: "—",
+    subjectIds,
+    status: "pending",
+    students: 0,
+    rating: 0,
+    joinedDate: formatDateLabel(detail.user.createdAt),
+    experience: "—",
+    bio: "",
+    location: "—",
+    languages: [],
+    availability: "—",
+    classesThisMonth: 0,
+    totalClasses: 0,
+    completionRate: 0,
+    responseTime: "—",
+    qualifications: [],
+    recentStudents: [],
+    upcomingClasses: [],
+    monthlyEarnings: 0,
+  };
+
+  const status =
+    detail.approvalStatus === "APPROVED"
+      ? "active"
+      : detail.approvalStatus === "REJECTED"
+        ? "inactive"
+        : "pending";
+
+  return {
+    ...seed,
+    id: detail.id,
+    email: detail.user.email,
+    status,
+    subjectIds,
+    students: detail.students,
+    rating: detail.rating,
+    bio: detail.bio ?? seed.bio,
+    location: detail.location ?? seed.location,
+    languages,
+    experience: detail.experience ?? seed.experience,
+    qualifications,
+    classesThisMonth: detail.classesThisMonth,
+    completionRate: detail.completionRate,
+    responseTime:
+      detail.responseTimeHours != null
+        ? `en ${detail.responseTimeHours}h`
+        : seed.responseTime,
+    joinedDate: formatDateLabel(detail.user.createdAt),
+  };
+}
+
 // ─── Lessons Section ──────────────────────────────────────────────────────────
 
 function TutorLessonsSection({
-  tutorId,
   subjectIds,
+  lessons,
+  series,
   color,
 }: {
-  tutorId: string;
   subjectIds: string[];
+  lessons: Lesson[];
+  series: LessonSeries[];
   color: string;
 }) {
-  const subjects = subjectIds
-    .map((id) => mockSubjects.find((s) => s.id === id))
-    .filter(Boolean) as { id: string; name: string; color: string }[];
+  const subjects = subjectIds.map((id) => ({
+    id,
+    name: getSubjectName(id),
+    color: getSubjectColor(id),
+  }));
 
   const [activeSubject, setActiveSubject] = useState<string>(
     subjects[0]?.id ?? "",
@@ -91,12 +442,8 @@ function TutorLessonsSection({
   const activeColor =
     subjects.find((s) => s.id === activeSubject)?.color ?? color;
 
-  const subjectLessons = mockLessons.filter(
-    (l) => l.tutorId === tutorId && l.subjectId === activeSubject,
-  );
-  const subjectSeries = mockLessonSeries.filter(
-    (s) => s.tutorId === tutorId && s.subjectId === activeSubject,
-  );
+  const subjectLessons = lessons.filter((l) => l.subjectId === activeSubject);
+  const subjectSeries = series.filter((s) => s.subjectId === activeSubject);
   const standalone = subjectLessons.filter((l) => !l.seriesId);
 
   return (
@@ -336,9 +683,13 @@ function TutorLessonsSection({
 function TutorRevenueSection({
   revenue,
   platformCut,
+  lessonTitleById,
+  seriesTitleById,
 }: {
   revenue: TutorRevenue;
   platformCut: number;
+  lessonTitleById: Record<string, string>;
+  seriesTitleById: Record<string, string>;
 }) {
   const [openSubject, setOpenSubject] = useState<string | null>(
     revenue.bySubject[0]?.subjectId ?? null,
@@ -466,9 +817,6 @@ function TutorRevenueSection({
                 {isSubOpen && (
                   <div className="border-t border-border/40">
                     {sub.series.map((ser) => {
-                      const seriesInfo = mockLessonSeries.find(
-                        (s) => s.id === ser.seriesId,
-                      );
                       const isSerOpen = openSeries === ser.seriesId;
                       return (
                         <div
@@ -494,7 +842,7 @@ function TutorRevenueSection({
                               style={{ color: subColor }}
                             />
                             <span className="flex-1 text-xs font-semibold text-foreground">
-                              {seriesInfo?.title ?? ser.seriesId}
+                              {seriesTitleById[ser.seriesId] ?? ser.seriesId}
                             </span>
                             <span className="text-[11px] text-muted-foreground">
                               {ser.sales} ventes
@@ -516,9 +864,6 @@ function TutorRevenueSection({
                           {isSerOpen && (
                             <div className="bg-muted/20">
                               {ser.lessons.map((les) => {
-                                const lessonInfo = mockLessons.find(
-                                  (l) => l.id === les.lessonId,
-                                );
                                 return (
                                   <div
                                     key={les.lessonId}
@@ -526,7 +871,8 @@ function TutorRevenueSection({
                                   >
                                     <PlayCircle className="h-3 w-3 shrink-0 text-muted-foreground" />
                                     <span className="flex-1 text-[11px] text-foreground/80">
-                                      {lessonInfo?.title ?? les.lessonId}
+                                      {lessonTitleById[les.lessonId] ??
+                                        les.lessonId}
                                     </span>
                                     <span className="text-[11px] text-muted-foreground">
                                       {les.sales} ventes
@@ -555,9 +901,6 @@ function TutorRevenueSection({
                     {sub.standaloneLessons.length > 0 && (
                       <div>
                         {sub.standaloneLessons.map((les) => {
-                          const lessonInfo = mockLessons.find(
-                            (l) => l.id === les.lessonId,
-                          );
                           return (
                             <div
                               key={les.lessonId}
@@ -565,7 +908,7 @@ function TutorRevenueSection({
                             >
                               <PlayCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                               <span className="flex-1 text-xs text-foreground/80">
-                                {lessonInfo?.title ?? les.lessonId}
+                                {lessonTitleById[les.lessonId] ?? les.lessonId}
                               </span>
                               <span className="text-[11px] text-muted-foreground">
                                 {les.sales} ventes
@@ -820,9 +1163,11 @@ const resourceStatusStyle: Record<
 function TutorResourcesSection({
   resources,
   color,
+  lessonTitleById,
 }: {
   resources: TutorResource[];
   color: string;
+  lessonTitleById: Record<string, string>;
 }) {
   const [filter, setFilter] = useState<
     "all" | "published" | "draft" | "archived"
@@ -884,8 +1229,8 @@ function TutorResourcesSection({
             const Icon = resourceTypeIcon[res.type] ?? FileText;
             const status = resourceStatusStyle[res.status];
             const linkedLesson = res.lessonId
-              ? mockLessons.find((l) => l.id === res.lessonId)
-              : null;
+              ? lessonTitleById[res.lessonId]
+              : undefined;
             const subColor = res.subjectId
               ? getSubjectColor(res.subjectId)
               : "oklch(0.58 0.16 250)";
@@ -925,7 +1270,7 @@ function TutorResourcesSection({
                     {linkedLesson && (
                       <span className="flex items-center gap-1">
                         <PlayCircle className="h-3 w-3" />
-                        {linkedLesson.title}
+                        {linkedLesson}
                       </span>
                     )}
                     <span>{res.uploadedDate}</span>
@@ -958,13 +1303,61 @@ export default function TutorDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [tutors, setTutors] = useState<Tutor[]>(mockTutors);
+  const router = useRouter();
+  const platformCut = useSettingsStore((s) => s.platformCut);
+  const { data: tutorDetail, isLoading } = useTutorDetail(id);
+  const { data: tutorLessonsData } = useTutorLessons(id);
+  const { data: tutorRevenueData } = useTutorRevenue(id);
+  const { data: tutorRevenueBreakdown } = useTutorRevenueBreakdown(id);
+  const approveTutor = useApproveTutor();
+  const deactivateTutor = useDeactivateTutor();
+  const rejectTutor = useRejectTutor();
   const [confirmAction, setConfirmAction] = useState<
     "approve" | "deactivate" | "reject" | null
   >(null);
+  if (!isLoading && !tutorDetail) {
+    notFound();
+  }
+  if (!tutorDetail) {
+    return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+  }
 
-  const tutor = tutors.find((t) => t.id === id);
-  if (!tutor) notFound();
+  const detailLessons = tutorDetail
+    ? normalizeLessonsFromDetail(id, tutorDetail.lessonSeries)
+    : { lessons: [], series: [] };
+  const apiLessons = normalizeLessonsFromApi(id, tutorLessonsData);
+  const lessonsData =
+    apiLessons.lessons.length > 0 || apiLessons.series.length > 0
+      ? apiLessons
+      : detailLessons;
+
+  const detailResources = tutorDetail
+    ? normalizeResources(id, tutorDetail.resources)
+    : [];
+  const detailSchedule = tutorDetail
+    ? normalizeSchedule(id, tutorDetail.sessions, tutorDetail.availability)
+    : undefined;
+  const normalizedRevenue = normalizeRevenue(
+    tutorRevenueData,
+    tutorRevenueBreakdown,
+  );
+
+  const tutor = {
+    ...createTutorFromDetail(tutorDetail),
+    resources: detailResources,
+    schedule: detailSchedule,
+    revenue: normalizedRevenue,
+  };
+  const availabilitySummary = formatAvailabilitySummary(
+    tutor.schedule?.availability ?? [],
+    tutor.availability,
+  );
+  const lessonTitleById = Object.fromEntries(
+    lessonsData.lessons.map((lesson) => [lesson.id, lesson.title]),
+  );
+  const seriesTitleById = Object.fromEntries(
+    lessonsData.series.map((item) => [item.id, item.title]),
+  );
 
   const primarySubjectId = tutor.subjectIds[0];
   const color = getSubjectColor(primarySubjectId);
@@ -975,29 +1368,22 @@ export default function TutorDetailPage({
     .slice(0, 2)
     .toUpperCase();
 
-  const handleApprove = () => {
-    setTutors((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: "active" } : t)),
-    );
+  const handleApprove = async () => {
+    await approveTutor.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleDeactivate = () => {
-    setTutors((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: "inactive" } : t)),
-    );
+  const handleDeactivate = async () => {
+    await deactivateTutor.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleReject = () => {
-    setTutors((prev) => prev.filter((t) => t.id !== id));
+  const handleReject = async () => {
+    await rejectTutor.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
-    window.location.href = "/dashboard/tutors";
+    router.push("/dashboard/tutors");
   };
-
-  // Current tutor after state change
-  const currentTutor = tutors.find((t) => t.id === id) ?? tutor;
-  const platformCut = useSettingsStore((s) => s.platformCut);
+  const currentTutor = tutor;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -1091,9 +1477,9 @@ export default function TutorDetailPage({
                 {currentTutor.name}
               </h1>
               <StatusBadge status={currentTutor.status} />
-              {currentTutor.subjectIds.map((sid) => (
+              {currentTutor.subjectIds.map((sid, index) => (
                 <span
-                  key={sid}
+                  key={`${sid}-${index}`}
                   className="flex items-center gap-1 text-xs font-medium"
                   style={{ color: getSubjectColor(sid) }}
                 >
@@ -1267,9 +1653,9 @@ export default function TutorDetailPage({
                           />
                         ),
                       },
-                    ].map(({ label, value, icon }) => (
+                    ].map(({ label, value, icon }, index) => (
                       <div
-                        key={label}
+                        key={`${label}-${index}`}
                         className="flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2">
@@ -1574,7 +1960,7 @@ export default function TutorDetailPage({
                     </h2>
                     {currentTutor.recentStudents.length > 0 ? (
                       <div className="space-y-3">
-                        {currentTutor.recentStudents.map((s) => {
+                        {currentTutor.recentStudents.map((s, index) => {
                           const scoreColor =
                             s.progress >= 90
                               ? "oklch(0.58 0.16 155)"
@@ -1589,7 +1975,7 @@ export default function TutorDetailPage({
                             .toUpperCase();
                           return (
                             <div
-                              key={s.name}
+                              key={`${s.name}-${s.grade}-${index}`}
                               className="flex items-center gap-4"
                             >
                               <div
@@ -1677,11 +2063,11 @@ export default function TutorDetailPage({
                       },
                       {
                         label: "Disponibilité",
-                        value: currentTutor.availability,
+                        value: availabilitySummary,
                       },
-                    ].map(({ label, value }) => (
+                    ].map(({ label, value }, index) => (
                       <div
-                        key={label}
+                        key={`${label}-${index}`}
                         className="flex items-start justify-between gap-4"
                       >
                         <span className="text-xs text-muted-foreground">
@@ -1700,8 +2086,9 @@ export default function TutorDetailPage({
             {/* Content tab */}
             <TabsContent value="content" className="mt-6">
               <TutorLessonsSection
-                tutorId={currentTutor.id}
                 subjectIds={currentTutor.subjectIds}
+                lessons={lessonsData.lessons}
+                series={lessonsData.series}
                 color={color}
               />
             </TabsContent>
@@ -1712,6 +2099,8 @@ export default function TutorDetailPage({
                 <TutorRevenueSection
                   revenue={currentTutor.revenue}
                   platformCut={platformCut}
+                  lessonTitleById={lessonTitleById}
+                  seriesTitleById={seriesTitleById}
                 />
               ) : (
                 <div className="dash-card flex flex-col items-center justify-center py-16 text-center">
@@ -1733,6 +2122,7 @@ export default function TutorDetailPage({
                 <TutorResourcesSection
                   resources={currentTutor.resources}
                   color={color}
+                  lessonTitleById={lessonTitleById}
                 />
               ) : (
                 <div className="dash-card flex flex-col items-center justify-center py-16 text-center">
@@ -1749,9 +2139,7 @@ export default function TutorDetailPage({
             {/* Schedule tab */}
             <TabsContent value="schedule" className="mt-6">
               <ScheduleView
-                schedule={
-                  currentTutor.schedule ?? mockSchedules[currentTutor.id]
-                }
+                schedule={currentTutor.schedule}
                 getSubjectColor={getSubjectColor}
               />
             </TabsContent>

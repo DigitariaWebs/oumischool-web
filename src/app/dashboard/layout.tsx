@@ -2,6 +2,8 @@
 
 import { GenericSidebar } from "@/components/ui/generic-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { useAuthProfile } from "@/hooks/auth";
+import { clearAuthToken, getAuthToken } from "@/lib/api-client";
 import {
   BookOpen,
   GraduationCap,
@@ -12,6 +14,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 const menuSections = [
   {
@@ -70,6 +73,27 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const hasToken = !!getAuthToken();
+  const { data: profile, isLoading, isError } = useAuthProfile(hasToken);
+
+  useEffect(() => {
+    if (!hasToken) {
+      router.replace("/login");
+      return;
+    }
+    if (isError) {
+      clearAuthToken();
+      router.replace("/login");
+      return;
+    }
+    if (profile && String(profile.role).toUpperCase() !== "ADMIN") {
+      clearAuthToken();
+      router.replace("/login?reason=admin_only");
+    }
+  }, [hasToken, isError, profile, router]);
+
+  if (!hasToken || isLoading) return null;
+  if (profile && String(profile.role).toUpperCase() !== "ADMIN") return null;
 
   return (
     <SidebarProvider>
@@ -87,7 +111,10 @@ export default function DashboardLayout({
           menuSections={menuSections}
           showCollapseAll={false}
           showSearch={false}
-          onLogout={() => router.push("/login")}
+          onLogout={() => {
+            clearAuthToken();
+            router.replace("/login");
+          }}
         />
         <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
       </div>

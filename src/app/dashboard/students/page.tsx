@@ -14,14 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  STUDENT_COLOR,
-  mockStudents,
-  scoreColor,
-  subjectColors,
-  getStudentInitials,
-} from "@/lib/data/students";
-import { Student, StudentStatus } from "@/types";
+import { useParents } from "@/hooks/parents";
+import { useCreateStudent, useStudents } from "@/hooks/students";
+import type { AdminStudent } from "@/hooks/students/api";
+import { Student } from "@/types";
 import {
   Users,
   Plus,
@@ -32,6 +28,57 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
+
+const STUDENT_COLOR = "oklch(0.62 0.16 80)";
+const SUBJECT_COLORS: Record<string, string> = {
+  math: "oklch(0.72 0.14 80)",
+  mathematics: "oklch(0.72 0.14 80)",
+  physics: "oklch(0.65 0.12 220)",
+  "ui/ux": "oklch(0.58 0.16 155)",
+  design: "oklch(0.68 0.18 20)",
+};
+
+function scoreColor(value: number): string {
+  if (value >= 90) return "oklch(0.58 0.16 155)";
+  if (value >= 75) return "oklch(0.62 0.16 80)";
+  if (value >= 60) return "oklch(0.65 0.12 220)";
+  return "oklch(0.68 0.18 20)";
+}
+
+function getStudentInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function getSubjectColor(subject?: string | null): string {
+  return (
+    SUBJECT_COLORS[String(subject ?? "").toLowerCase()] ??
+    "oklch(0.58 0.16 155)"
+  );
+}
+
+function adaptStudent(student: AdminStudent): Student {
+  return {
+    id: student.id,
+    name: student.name,
+    email: student.parent?.user?.email ?? "—",
+    grade: student.grade,
+    parentName:
+      student.parentName ||
+      `${student.parent?.firstName ?? ""} ${student.parent?.lastName ?? ""}`.trim() ||
+      "—",
+    status: student.deletedAt ? "inactifs" : "actifs",
+    enrolledSubjects: student.enrolledSubjects,
+    avgScore: student.avgScore,
+    attendanceRate: student.attendanceRate,
+    joinedDate: "—",
+    age: 0,
+  };
+}
 
 const columns: ColumnDef<Student>[] = [
   {
@@ -99,9 +146,9 @@ const columns: ColumnDef<Student>[] = [
               key={s}
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
               style={{
-                background: `${subjectColors[s] ?? "oklch(0.58 0.16 155)"}18`,
-                color: subjectColors[s] ?? "oklch(0.58 0.16 155)",
-                border: `1px solid ${subjectColors[s] ?? "oklch(0.58 0.16 155)"}30`,
+                background: `${getSubjectColor(s)}18`,
+                color: getSubjectColor(s),
+                border: `1px solid ${getSubjectColor(s)}30`,
               }}
             >
               {s}
@@ -217,53 +264,43 @@ const filters = [
 
 const defaultFormState: {
   name: string;
-  email: string;
   grade: string;
-  parentName: string;
-  age: string;
-  status: StudentStatus;
+  parentId: string;
+  dateOfBirth: string;
 } = {
   name: "",
-  email: "",
   grade: "",
-  parentName: "",
-  age: "",
-  status: "actifs",
+  parentId: "",
+  dateOfBirth: "",
 };
 
 export default function EtudiantsPage() {
-  const [étudiants, setÉtudiants] = useState<Student[]>(mockStudents);
+  const { data: studentsData = [], isLoading } = useStudents();
+  const { data: parentsData = [] } = useParents();
+  const createStudent = useCreateStudent();
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(defaultFormState);
+  const étudiants = studentsData.map(adaptStudent);
 
   const actifsCount = étudiants.filter((s) => s.status === "actifs").length;
+  const scoredStudents = étudiants.filter((s) => s.avgScore > 0);
   const avgScore =
-    étudiants
-      .filter((s) => s.avgScore > 0)
-      .reduce((acc, s) => acc + s.avgScore, 0) /
-    (étudiants.filter((s) => s.avgScore > 0).length || 1);
+    scoredStudents.reduce((acc, s) => acc + s.avgScore, 0) /
+    (scoredStudents.length || 1);
+  const bestStudent = scoredStudents.reduce<Student | null>(
+    (top, student) => (!top || student.avgScore > top.avgScore ? student : top),
+    null,
+  );
+  const bestStudentName = bestStudent?.name ?? "—";
 
-  const handleAdd = () => {
-    if (!form.name || !form.grade) return;
-    const newStudent: Student = {
-      id: `s${Date.now()}`,
+  const handleAdd = async () => {
+    if (!form.name || !form.grade || !form.parentId) return;
+    await createStudent.mutateAsync({
+      parentId: form.parentId,
       name: form.name,
-      email:
-        form.email ||
-        `${form.name.toLowerCase().replace(/\s/g, ".")}@student.oumischool.com`,
       grade: form.grade,
-      parentName: form.parentName || "—",
-      status: form.status,
-      enrolledSubjects: [],
-      avgScore: 0,
-      attendanceRate: 0,
-      joinedDate: new Date().toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      age: parseInt(form.age) || 0,
-    };
-    setÉtudiants((prev) => [newStudent, ...prev]);
+      dateOfBirth: form.dateOfBirth || undefined,
+    });
     setForm(defaultFormState);
     setModalOpen(false);
   };
@@ -330,27 +367,26 @@ export default function EtudiantsPage() {
           />
           <span className="text-xs text-muted-foreground">
             Meilleur étudiant:{" "}
-            <strong className="text-foreground">
-              {
-                étudiants.reduce(
-                  (top, s) => (s.avgScore > top.avgScore ? s : top),
-                  étudiants[0],
-                ).name
-              }
-            </strong>
+            <strong className="text-foreground">{bestStudentName}</strong>
           </span>
         </div>
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto p-6">
-        <DataTable
-          data={étudiants}
-          columns={columns}
-          filters={filters}
-          searchKeys={["name", "email", "grade", "parentName"]}
-          itemsPerPage={8}
-        />
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            Chargement des étudiants…
+          </div>
+        ) : (
+          <DataTable
+            data={étudiants}
+            columns={columns}
+            filters={filters}
+            searchKeys={["name", "email", "grade", "parentName"]}
+            itemsPerPage={8}
+          />
+        )}
       </div>
 
       {/* Ajouter étudiant Modal */}
@@ -390,16 +426,22 @@ export default function EtudiantsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="student-email">E-mail (optionnel)</Label>
-              <Input
-                id="student-email"
-                type="email"
-                placeholder="Auto-generated if empty"
-                value={form.email}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, email: e.target.value }))
-                }
-              />
+              <Label>Parent</Label>
+              <Select
+                value={form.parentId}
+                onValueChange={(v) => setForm((f) => ({ ...f, parentId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un parent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {parentsData.map((parent) => (
+                    <SelectItem key={parent.id} value={parent.id}>
+                      {parent.firstName} {parent.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -424,51 +466,22 @@ export default function EtudiantsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="student-age">Âge</Label>
+              <Label htmlFor="student-dob">Date de naissance</Label>
               <Input
-                id="student-age"
-                type="number"
-                placeholder="e.g. 12"
-                min={4}
-                max={20}
-                value={form.age}
+                id="student-dob"
+                type="date"
+                value={form.dateOfBirth}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, age: e.target.value }))
+                  setForm((f) => ({ ...f, dateOfBirth: e.target.value }))
                 }
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="student-parent">Nom du parent</Label>
-              <Input
-                id="student-parent"
-                placeholder="e.g. Paulo Gavi"
-                value={form.parentName}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, parentName: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Statut</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as Student["status"] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="actifs">Active</SelectItem>
-                  <SelectItem value="inactifs">Inactifs</SelectItem>
-                  <SelectItem value="graduated">Graduated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {createStudent.isError && (
+            <p className="text-xs text-destructive">
+              Impossible de créer l&apos;étudiant.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

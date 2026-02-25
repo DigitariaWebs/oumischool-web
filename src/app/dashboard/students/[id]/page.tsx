@@ -4,12 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
-  STUDENT_COLOR,
-  getStudentInitials,
-  mockStudents,
-  scoreColor,
-  subjectColors,
-} from "@/lib/data/students";
+  useDeactivateStudent,
+  useReactivateStudent,
+  useStudentDetail,
+} from "@/hooks/students";
+import type { AdminStudent } from "@/hooks/students/api";
 import { Student } from "@/types";
 import {
   ArrowLeft,
@@ -27,6 +26,56 @@ import { notFound } from "next/navigation";
 import { use, useState } from "react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+const STUDENT_COLOR = "oklch(0.62 0.16 80)";
+const SUBJECT_COLORS: Record<string, string> = {
+  math: "oklch(0.72 0.14 80)",
+  mathematics: "oklch(0.72 0.14 80)",
+  physics: "oklch(0.65 0.12 220)",
+  "ui/ux": "oklch(0.58 0.16 155)",
+  design: "oklch(0.68 0.18 20)",
+};
+
+function scoreColor(value: number): string {
+  if (value >= 90) return "oklch(0.58 0.16 155)";
+  if (value >= 75) return "oklch(0.62 0.16 80)";
+  if (value >= 60) return "oklch(0.65 0.12 220)";
+  return "oklch(0.68 0.18 20)";
+}
+
+function getStudentInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function getSubjectColor(subject?: string | null): string {
+  return (
+    SUBJECT_COLORS[String(subject ?? "").toLowerCase()] ??
+    "oklch(0.58 0.16 155)"
+  );
+}
+
+function adaptStudent(student: AdminStudent): Student {
+  return {
+    id: student.id,
+    name: student.name,
+    email: student.parent?.user?.email ?? "—",
+    grade: student.grade,
+    parentName:
+      student.parentName ||
+      `${student.parent?.firstName ?? ""} ${student.parent?.lastName ?? ""}`.trim() ||
+      "—",
+    status: student.deletedAt ? "inactifs" : "actifs",
+    enrolledSubjects: student.enrolledSubjects,
+    avgScore: student.avgScore,
+    attendanceRate: student.attendanceRate,
+    joinedDate: "—",
+    age: 0,
+  };
+}
 
 function ScoreBar({ value, color }: { value: number; color: string }) {
   return (
@@ -84,30 +133,29 @@ export default function StudentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [students, setStudents] = useState<Student[]>(mockStudents);
+  const { data: studentData, isLoading } = useStudentDetail(id);
+  const deactivateStudent = useDeactivateStudent();
+  const reactivateStudent = useReactivateStudent();
   const [confirmAction, setConfirmAction] = useState<
     "activate" | "deactivate" | null
   >(null);
+  if (!isLoading && !studentData) notFound();
+  if (!studentData) {
+    return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+  }
 
-  const student = students.find((s) => s.id === id);
-  if (!student) notFound();
-
-  const currentStudent = students.find((s) => s.id === id) ?? student;
+  const currentStudent = adaptStudent(studentData);
   const initials = getStudentInitials(currentStudent.name);
   const avgColor = scoreColor(currentStudent.avgScore);
   const attendanceCol = scoreColor(currentStudent.attendanceRate);
 
-  const handleActivate = () => {
-    setStudents((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: "actifs" } : s)),
-    );
+  const handleActivate = async () => {
+    await reactivateStudent.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleDeactivate = () => {
-    setStudents((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: "inactifs" } : s)),
-    );
+  const handleDeactivate = async () => {
+    await deactivateStudent.mutateAsync(id).catch(() => {});
     setConfirmAction(null);
   };
 
@@ -346,8 +394,7 @@ export default function StudentDetailPage({
                 {currentStudent.enrolledSubjects.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {currentStudent.enrolledSubjects.map((subject) => {
-                      const color =
-                        subjectColors[subject] ?? "oklch(0.58 0.16 155)";
+                      const color = getSubjectColor(subject);
                       return (
                         <span
                           key={subject}
@@ -392,9 +439,9 @@ export default function StudentDetailPage({
                     value: currentStudent.id.toUpperCase(),
                   },
                   { label: "Parent", value: currentStudent.parentName },
-                ].map(({ label, value }) => (
+                ].map(({ label, value }, index) => (
                   <div
-                    key={label}
+                    key={`${label}-${index}`}
                     className="flex items-start justify-between gap-4"
                   >
                     <span className="text-xs text-muted-foreground shrink-0">
