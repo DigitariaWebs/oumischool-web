@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useDeactivateStudent,
   useReactivateStudent,
@@ -14,8 +15,8 @@ import {
   ArrowLeft,
   Award,
   BookOpen,
-  CalendarDays,
   CheckCircle2,
+  GraduationCap,
   Mail,
   TrendingUp,
   Users,
@@ -25,7 +26,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use, useState } from "react";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const STUDENT_COLOR = "oklch(0.62 0.16 80)";
 const SUBJECT_COLORS: Record<string, string> = {
   math: "oklch(0.72 0.14 80)",
@@ -93,39 +93,211 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
   );
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  color,
-  bg,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  sub: string;
-  color: string;
-  bg: string;
-}) {
+function StudentOverviewTab({ student }: { student: Student }) {
+  const avgColor = scoreColor(student.avgScore);
+  const attendanceCol = scoreColor(student.attendanceRate);
+
   return (
-    <div className="dash-card p-4 flex flex-col gap-3">
-      <div
-        className="flex h-9 w-9 items-center justify-center rounded-xl"
-        style={{ background: bg }}
-      >
-        <Icon className="h-4 w-4" style={{ color }} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          {
+            label: "Matières inscrites",
+            value: student.enrolledSubjects.length || "—",
+            sub:
+              student.enrolledSubjects.length > 0
+                ? student.enrolledSubjects.join(", ")
+                : "aucune matière",
+            icon: BookOpen,
+            color: STUDENT_COLOR,
+            bg: "oklch(0.95 0.03 80)",
+          },
+          {
+            label: "Moyenne générale",
+            value: student.avgScore > 0 ? `${student.avgScore}%` : "—",
+            sub:
+              student.avgScore >= 90
+                ? "Excellent"
+                : student.avgScore >= 75
+                  ? "Bien"
+                  : student.avgScore >= 60
+                    ? "Passable"
+                    : "À améliorer",
+            icon: Award,
+            color: avgColor,
+            bg: `${avgColor}18`,
+          },
+          {
+            label: "Taux de présence",
+            value:
+              student.attendanceRate > 0 ? `${student.attendanceRate}%` : "—",
+            sub: "des cours suivis",
+            icon: TrendingUp,
+            color: attendanceCol,
+            bg: `${attendanceCol}18`,
+          },
+          {
+            label: "Classe",
+            value: student.grade,
+            sub: `${student.age} ans`,
+            icon: GraduationCap,
+            color: "oklch(0.52 0.14 250)",
+            bg: "oklch(0.93 0.02 250)",
+          },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="dash-card p-4 flex flex-col gap-2">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-xl"
+                style={{ background: stat.bg }}
+              >
+                <Icon className="h-4 w-4" style={{ color: stat.color }} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-foreground">
+                  {stat.value}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+              <p className="text-[11px] text-muted-foreground/70">{stat.sub}</p>
+            </div>
+          );
+        })}
       </div>
-      <div>
-        <p className="text-xl font-bold text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
+
+      <div className="dash-card p-5">
+        <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          Informations du compte
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Nom complet", value: student.name },
+            { label: "Classe", value: student.grade },
+            { label: "Âge", value: `${student.age} ans` },
+            {
+              label: "ID étudiant",
+              value: student.id.toUpperCase().slice(0, 8),
+            },
+            { label: "Parent", value: student.parentName },
+            { label: "E-mail parent", value: student.email },
+          ].map((item, index) => (
+            <div key={`${item.label}-${index}`}>
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                {item.label}
+              </p>
+              <p className="text-sm font-medium text-foreground mt-0.5 truncate">
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-      <p className="text-[11px] text-muted-foreground/70">{sub}</p>
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function StudentSubjectsTab({ student }: { student: Student }) {
+  return (
+    <div className="dash-card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <BookOpen className="h-4 w-4" style={{ color: STUDENT_COLOR }} />
+          Matières inscrites
+        </h2>
+        <span
+          className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+          style={{
+            background: `${STUDENT_COLOR}15`,
+            color: STUDENT_COLOR,
+          }}
+        >
+          {student.enrolledSubjects.length}
+        </span>
+      </div>
+
+      {student.enrolledSubjects.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <BookOpen className="h-10 w-10 text-muted-foreground/30 mb-4" />
+          <p className="text-sm font-medium text-foreground">
+            Aucune matière inscrite
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground max-w-xs">
+            Les matières auxquelles cet étudiant est inscrit apparaîtront ici.
+          </p>
+        </div>
+      ) : (
+        <div className="p-5">
+          <div className="flex flex-wrap gap-2">
+            {student.enrolledSubjects.map((subject) => {
+              const color = getSubjectColor(subject);
+              return (
+                <span
+                  key={subject}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium"
+                  style={{
+                    background: `${color}18`,
+                    color,
+                    border: `1px solid ${color}30`,
+                  }}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  {subject}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentPerformanceTab({ student }: { student: Student }) {
+  const avgColor = scoreColor(student.avgScore);
+  const attendanceCol = scoreColor(student.attendanceRate);
+
+  return (
+    <div className="dash-card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
+        <Award className="h-4 w-4" style={{ color: STUDENT_COLOR }} />
+        Performance
+      </h2>
+      <div className="space-y-6">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-muted-foreground">
+              Moyenne générale
+            </span>
+            <span className="text-xs font-semibold" style={{ color: avgColor }}>
+              {student.avgScore > 0 ? `${student.avgScore}%` : "—"}
+            </span>
+          </div>
+          {student.avgScore > 0 && (
+            <ScoreBar value={student.avgScore} color={avgColor} />
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-muted-foreground">
+              Taux de présence
+            </span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: attendanceCol }}
+            >
+              {student.attendanceRate > 0 ? `${student.attendanceRate}%` : "—"}
+            </span>
+          </div>
+          {student.attendanceRate > 0 && (
+            <ScoreBar value={student.attendanceRate} color={attendanceCol} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function StudentDetailPage({
   params,
@@ -139,6 +311,7 @@ export default function StudentDetailPage({
   const [confirmAction, setConfirmAction] = useState<
     "activate" | "deactivate" | null
   >(null);
+
   if (!isLoading && !studentData) notFound();
   if (!studentData) {
     return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
@@ -146,8 +319,6 @@ export default function StudentDetailPage({
 
   const currentStudent = adaptStudent(studentData);
   const initials = getStudentInitials(currentStudent.name);
-  const avgColor = scoreColor(currentStudent.avgScore);
-  const attendanceCol = scoreColor(currentStudent.attendanceRate);
 
   const handleActivate = async () => {
     await reactivateStudent.mutateAsync(id).catch(() => {});
@@ -161,323 +332,170 @@ export default function StudentDetailPage({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Top bar */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background px-6">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/students">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 rounded-xl text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Étudiants
-            </Button>
-          </Link>
-          <span className="text-border/80">/</span>
-          <span className="text-sm font-medium text-foreground">
-            {currentStudent.name}
-          </span>
+      <header
+        className="shrink-0 border-b border-border/60 bg-background"
+        style={{
+          background: `linear-gradient(135deg, ${STUDENT_COLOR}0a 0%, transparent 60%)`,
+        }}
+      >
+        <div className="flex h-11 items-center justify-between border-b border-border/40 px-6">
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/students">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Étudiants
+              </Button>
+            </Link>
+            <span className="text-border/80 text-xs">/</span>
+            <span className="text-xs font-medium text-foreground">
+              {currentStudent.name}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {currentStudent.status === "actifs" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 rounded-lg px-3 text-xs"
+                onClick={() => setConfirmAction("deactivate")}
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Désactiver
+              </Button>
+            )}
+            {currentStudent.status === "inactifs" && (
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 rounded-lg px-3 text-xs text-white"
+                style={{ background: "oklch(0.58 0.16 155)" }}
+                onClick={() => setConfirmAction("activate")}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Réactiver
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {currentStudent.status === "actifs" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 rounded-xl"
-              onClick={() => setConfirmAction("deactivate")}
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              Désactiver
-            </Button>
-          )}
-          {currentStudent.status === "inactifs" && (
-            <Button
-              size="sm"
-              className="gap-1.5 rounded-xl text-white"
-              style={{ background: "oklch(0.58 0.16 155)" }}
-              onClick={() => setConfirmAction("activate")}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Réactiver
-            </Button>
-          )}
+        <div className="flex items-center gap-5 px-6 py-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white shadow-sm"
+            style={{ background: STUDENT_COLOR }}
+          >
+            {initials}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-base font-bold text-foreground leading-none">
+                {currentStudent.name}
+              </h1>
+              <StatusBadge status={currentStudent.status} />
+            </div>
+            <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <GraduationCap className="h-3 w-3" />
+                {currentStudent.grade}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Users className="h-3 w-3" />
+                {currentStudent.parentName}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Mail className="h-3 w-3" />
+                {currentStudent.email}
+              </span>
+            </div>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+              <BookOpen
+                className="h-3.5 w-3.5"
+                style={{ color: STUDENT_COLOR }}
+              />
+              <span className="text-sm font-bold text-foreground">
+                {currentStudent.enrolledSubjects.length}
+              </span>
+              <span className="text-xs text-muted-foreground">matières</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+              <Award
+                className="h-3.5 w-3.5"
+                style={{ color: scoreColor(currentStudent.avgScore) }}
+              />
+              <span className="text-sm font-bold text-foreground">
+                {currentStudent.avgScore > 0
+                  ? `${currentStudent.avgScore}%`
+                  : "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">moyenne</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+              <TrendingUp
+                className="h-3.5 w-3.5"
+                style={{ color: scoreColor(currentStudent.attendanceRate) }}
+              />
+              <span className="text-sm font-bold text-foreground">
+                {currentStudent.attendanceRate > 0
+                  ? `${currentStudent.attendanceRate}%`
+                  : "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">présence</span>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl p-6 space-y-6">
-          {/* Profile hero */}
-          <div className="dash-card overflow-hidden">
-            <div
-              className="h-24 w-full"
-              style={{
-                background: `linear-gradient(135deg, ${STUDENT_COLOR}28 0%, ${STUDENT_COLOR}10 100%)`,
-                borderBottom: `1px solid ${STUDENT_COLOR}20`,
-              }}
-            />
-            <div className="px-6 pb-6">
-              <div className="-mt-10 mb-4 flex items-end justify-between">
-                <div
-                  className="flex h-20 w-20 items-center justify-center rounded-2xl text-2xl font-bold text-white shadow-md ring-4 ring-card"
-                  style={{ background: STUDENT_COLOR }}
+        <div className="p-6 space-y-6">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList
+              variant="line"
+              className="w-full justify-start border-b border-border/60 rounded-none pb-0 h-auto"
+            >
+              <TabsTrigger value="overview" className="gap-1.5 pb-3">
+                <Users className="h-3.5 w-3.5" />
+                Vue générale
+              </TabsTrigger>
+              <TabsTrigger value="subjects" className="gap-1.5 pb-3">
+                <BookOpen className="h-3.5 w-3.5" />
+                Matières
+                <span
+                  className="rounded-full px-1.5 py-0 text-[10px] font-semibold"
+                  style={{
+                    background: `${STUDENT_COLOR}15`,
+                    color: STUDENT_COLOR,
+                  }}
                 >
-                  {initials}
-                </div>
-                <StatusBadge status={currentStudent.status} />
-              </div>
+                  {currentStudent.enrolledSubjects.length}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="performance" className="gap-1.5 pb-3">
+                <Award className="h-3.5 w-3.5" />
+                Performance
+              </TabsTrigger>
+            </TabsList>
 
-              <div className="space-y-1">
-                <h1 className="text-2xl font-bold text-foreground">
-                  {currentStudent.name}
-                </h1>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-muted-foreground">
-                    {currentStudent.grade}
-                  </span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <span className="text-sm text-muted-foreground">
-                    {currentStudent.age} ans
-                  </span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    {currentStudent.parentName}
-                  </div>
-                </div>
-              </div>
+            <TabsContent value="overview">
+              <StudentOverviewTab student={currentStudent} />
+            </TabsContent>
 
-              {/* Contact & info pills */}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-foreground/70">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                  {currentStudent.email}
-                </div>
-                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-foreground/70">
-                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                  Inscrit {currentStudent.joinedDate}
-                </div>
-                <Link
-                  href={`/dashboard/parents`}
-                  className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-foreground/70 hover:bg-muted/60 transition-colors"
-                >
-                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  {currentStudent.parentName}
-                </Link>
-              </div>
-            </div>
-          </div>
+            <TabsContent value="subjects">
+              <StudentSubjectsTab student={currentStudent} />
+            </TabsContent>
 
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard
-              icon={BookOpen}
-              label="Matières inscrites"
-              value={currentStudent.enrolledSubjects.length || "—"}
-              sub={
-                currentStudent.enrolledSubjects.length > 0
-                  ? currentStudent.enrolledSubjects.join(", ")
-                  : "aucune matière"
-              }
-              color={STUDENT_COLOR}
-              bg="oklch(0.95 0.03 80)"
-            />
-            <StatCard
-              icon={Award}
-              label="Moyenne générale"
-              value={
-                currentStudent.avgScore > 0
-                  ? `${currentStudent.avgScore}%`
-                  : "—"
-              }
-              sub={
-                currentStudent.avgScore >= 90
-                  ? "Excellent"
-                  : currentStudent.avgScore >= 75
-                    ? "Bien"
-                    : currentStudent.avgScore >= 60
-                      ? "Passable"
-                      : "À améliorer"
-              }
-              color={avgColor}
-              bg={`${avgColor}18`}
-            />
-            <StatCard
-              icon={TrendingUp}
-              label="Taux de présence"
-              value={
-                currentStudent.attendanceRate > 0
-                  ? `${currentStudent.attendanceRate}%`
-                  : "—"
-              }
-              sub="des cours suivis"
-              color={attendanceCol}
-              bg={`${attendanceCol}18`}
-            />
-            <StatCard
-              icon={CalendarDays}
-              label="Inscrit depuis"
-              value={currentStudent.joinedDate}
-              sub={`ID: ${currentStudent.id.toUpperCase()}`}
-              color="oklch(0.52 0.14 250)"
-              bg="oklch(0.93 0.02 250)"
-            />
-          </div>
-
-          {/* Main grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left col — 2/3 */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Performance */}
-              <div className="dash-card p-5">
-                <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Award className="h-4 w-4" style={{ color: STUDENT_COLOR }} />
-                  Performance
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">
-                        Moyenne générale
-                      </span>
-                      <span
-                        className="text-xs font-semibold"
-                        style={{ color: avgColor }}
-                      >
-                        {currentStudent.avgScore > 0
-                          ? `${currentStudent.avgScore}%`
-                          : "—"}
-                      </span>
-                    </div>
-                    {currentStudent.avgScore > 0 && (
-                      <ScoreBar
-                        value={currentStudent.avgScore}
-                        color={avgColor}
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">
-                        Taux de présence
-                      </span>
-                      <span
-                        className="text-xs font-semibold"
-                        style={{ color: attendanceCol }}
-                      >
-                        {currentStudent.attendanceRate > 0
-                          ? `${currentStudent.attendanceRate}%`
-                          : "—"}
-                      </span>
-                    </div>
-                    {currentStudent.attendanceRate > 0 && (
-                      <ScoreBar
-                        value={currentStudent.attendanceRate}
-                        color={attendanceCol}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Enrolled subjects */}
-              <div className="dash-card p-5">
-                <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
-                  <BookOpen
-                    className="h-4 w-4"
-                    style={{ color: STUDENT_COLOR }}
-                  />
-                  Matières inscrites
-                </h2>
-                {currentStudent.enrolledSubjects.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {currentStudent.enrolledSubjects.map((subject) => {
-                      const color = getSubjectColor(subject);
-                      return (
-                        <span
-                          key={subject}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
-                          style={{
-                            background: `${color}18`,
-                            color,
-                            border: `1px solid ${color}30`,
-                          }}
-                        >
-                          <BookOpen className="h-3 w-3" />
-                          {subject}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <BookOpen className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Aucune matière inscrite pour l&apos;instant
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right col — 1/3 */}
-            <div className="space-y-6">
-              {/* Account info */}
-              <div className="dash-card p-5 space-y-3">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Informations du compte
-                </h2>
-                {[
-                  { label: "Nom complet", value: currentStudent.name },
-                  { label: "Classe", value: currentStudent.grade },
-                  { label: "Âge", value: `${currentStudent.age} ans` },
-                  { label: "Inscrit depuis", value: currentStudent.joinedDate },
-                  {
-                    label: "ID étudiant",
-                    value: currentStudent.id.toUpperCase(),
-                  },
-                  { label: "Parent", value: currentStudent.parentName },
-                ].map(({ label, value }, index) => (
-                  <div
-                    key={`${label}-${index}`}
-                    className="flex items-start justify-between gap-4"
-                  >
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {label}
-                    </span>
-                    <span className="text-xs font-medium text-foreground text-right">
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Parent link */}
-              <div className="dash-card p-5">
-                <h2 className="mb-3 text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  Parent
-                </h2>
-                <div className="flex items-center gap-3 rounded-xl border border-border/50 px-3 py-2.5">
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                    style={{ background: "oklch(0.52 0.14 250)" }}
-                  >
-                    {getStudentInitials(currentStudent.parentName)}
-                  </div>
-                  <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                    {currentStudent.parentName}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+            <TabsContent value="performance">
+              <StudentPerformanceTab student={currentStudent} />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 
-      {/* Activate confirmation */}
       <Modal
         open={confirmAction === "activate"}
         onOpenChange={(open) => !open && setConfirmAction(null)}
@@ -513,7 +531,6 @@ export default function StudentDetailPage({
         </div>
       </Modal>
 
-      {/* Deactivate confirmation */}
       <Modal
         open={confirmAction === "deactivate"}
         onOpenChange={(open) => !open && setConfirmAction(null)}
