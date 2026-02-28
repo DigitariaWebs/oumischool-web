@@ -48,3 +48,11 @@ export function useCreateStudent() {
     },
   });
 }
+
+export function useStudentSchedule(studentId: string) {
+  return useQuery({
+    queryKey: studentKeys.detail(studentId).concat(["schedule"]),
+    queryFn: () => studentsApi.getSchedule(studentId),
+    enabled: !!studentId,
+  });
+}

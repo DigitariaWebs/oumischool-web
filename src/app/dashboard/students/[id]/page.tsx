@@ -2,19 +2,28 @@
 
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ScheduleView } from "@/components/ui/schedule-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useDeactivateStudent,
   useReactivateStudent,
   useStudentDetail,
+  useStudentSchedule,
 } from "@/hooks/students";
 import type { AdminStudent } from "@/hooks/students/api";
-import { Student } from "@/types";
+import {
+  Student,
+  TutorSchedule,
+  SessionMode,
+  SessionStatus,
+  SessionType,
+} from "@/types";
 import {
   ArrowLeft,
   Award,
   BookOpen,
+  CalendarRange,
   CheckCircle2,
   GraduationCap,
   Mail,
@@ -74,6 +83,67 @@ function adaptStudent(student: AdminStudent): Student {
     attendanceRate: student.attendanceRate,
     joinedDate: "—",
     age: 0,
+  };
+}
+
+interface StudentCalendarEvent {
+  id: string;
+  type: "session" | "event";
+  title: string;
+  subjectId: string | null;
+  mode: string | null;
+  startTime: string;
+  endTime: string;
+  status: string | null;
+  tutorName: string | null;
+  color: string | null;
+  completed: boolean;
+  allDay: boolean;
+}
+
+function normalizeStudentSchedule(
+  studentId: string,
+  events: StudentCalendarEvent[],
+): TutorSchedule {
+  const sessions = events
+    .filter((e) => e.type === "session")
+    .map((event) => {
+      const startDate = new Date(event.startTime);
+      const endDate = new Date(event.endTime);
+
+      const statusRaw = event.status?.toUpperCase() ?? "SCHEDULED";
+      const status: SessionStatus =
+        statusRaw === "COMPLETED"
+          ? "completed"
+          : statusRaw === "CANCELLED" || statusRaw === "REJECTED"
+            ? "cancelled"
+            : "scheduled";
+
+      return {
+        id: event.id.replace("session:", ""),
+        tutorId: "",
+        subjectId: event.subjectId ?? "",
+        title: event.title.replace("Session — ", ""),
+        day: startDate.getDay(),
+        startTime: `${String(startDate.getHours()).padStart(2, "0")}:${String(startDate.getMinutes()).padStart(2, "0")}`,
+        endTime: `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`,
+        mode: (event.mode === "presential"
+          ? "presential"
+          : "online") as SessionMode,
+        type: "individual" as SessionType,
+        status,
+        students: event.tutorName
+          ? [{ id: studentId, name: event.tutorName }]
+          : [],
+        recurringWeekly: false,
+        date: event.startTime.split("T")[0],
+      };
+    });
+
+  return {
+    tutorId: studentId,
+    sessions,
+    availability: [],
   };
 }
 
@@ -306,6 +376,7 @@ export default function StudentDetailPage({
 }) {
   const { id } = use(params);
   const { data: studentData, isLoading } = useStudentDetail(id);
+  const { data: scheduleData } = useStudentSchedule(id);
   const deactivateStudent = useDeactivateStudent();
   const reactivateStudent = useReactivateStudent();
   const [confirmAction, setConfirmAction] = useState<
@@ -319,6 +390,7 @@ export default function StudentDetailPage({
 
   const currentStudent = adaptStudent(studentData);
   const initials = getStudentInitials(currentStudent.name);
+  const studentSchedule = normalizeStudentSchedule(id, scheduleData ?? []);
 
   const handleActivate = async () => {
     await reactivateStudent.mutateAsync(id).catch(() => {});
@@ -479,6 +551,10 @@ export default function StudentDetailPage({
                 <Award className="h-3.5 w-3.5" />
                 Performance
               </TabsTrigger>
+              <TabsTrigger value="schedule" className="gap-1.5 pb-3">
+                <CalendarRange className="h-3.5 w-3.5" />
+                Planning
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -491,6 +567,13 @@ export default function StudentDetailPage({
 
             <TabsContent value="performance">
               <StudentPerformanceTab student={currentStudent} />
+            </TabsContent>
+
+            <TabsContent value="schedule" className="mt-6">
+              <ScheduleView
+                schedule={studentSchedule}
+                getSubjectColor={getSubjectColor}
+              />
             </TabsContent>
           </Tabs>
         </div>

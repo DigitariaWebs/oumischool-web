@@ -1,5 +1,20 @@
 import { api, asList, PaginatedListResponse } from "@/lib/api-client";
 
+export interface StudentCalendarEvent {
+  id: string;
+  type: "session" | "event";
+  title: string;
+  subjectId: string | null;
+  mode: string | null;
+  startTime: string;
+  endTime: string;
+  status: string | null;
+  tutorName: string | null;
+  color: string | null;
+  completed: boolean;
+  allDay: boolean;
+}
+
 export interface AdminStudent {
   id: string;
   name: string;
@@ -48,4 +63,6 @@ export const studentsApi = {
     api.post<unknown>(`/admin/students/${id}/reactivate`),
   create: (body: CreateAdminStudentPayload) =>
     api.post<AdminStudent>("/admin/students", body),
+  getSchedule: (studentId: string) =>
+    api.get<StudentCalendarEvent[]>(`/calendar?childId=${studentId}`),
 };
