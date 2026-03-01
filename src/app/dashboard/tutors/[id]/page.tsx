@@ -363,7 +363,10 @@ function createTutorFromDetail(
   const email = asString(detail.user?.email, "tutor@unknown");
   const seed = fallback ?? {
     id: detail.id,
-    name: email.split("@")[0] || "Tutor",
+    name:
+      `${detail.firstName ?? ""} ${detail.lastName ?? ""}`.trim() ||
+      email.split("@")[0] ||
+      "Tutor",
     email,
     phone: "—",
     subjectIds,

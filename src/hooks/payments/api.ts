@@ -5,6 +5,11 @@ export interface PaymentOrder {
   parentId: string;
   parentName?: string;
   parentEmail?: string;
+  parent?: {
+    firstName: string;
+    lastName: string;
+    user: { email: string };
+  };
   type: "RESOURCE" | "SESSION" | "SUBSCRIPTION";
   status: "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "CANCELLED";
   amount: number;
@@ -22,7 +27,6 @@ export interface PaymentOrder {
 export interface TutorPayout {
   id: string;
   tutorId: string;
-  tutorName?: string;
   amount: number;
   method: string | null;
   reference: string | null;
@@ -31,27 +35,24 @@ export interface TutorPayout {
   paidAt: string | null;
   status: "RECORDED" | "PAID" | "FAILED";
   createdAt: string;
-}
-
-export interface TutorPendingPayout {
-  tutorId: string;
-  tutorName: string;
-  email: string;
-  totalEarnings: number;
-  totalPaid: number;
-  pendingAmount: number;
-}
-
-export interface TutorWithRevenue {
-  tutorId: string;
-  tutorName: string;
-  email: string;
-  totalEarnings: number;
-  totalPaid: number;
-  pendingAmount: number;
+  tutor: {
+    firstName: string | null;
+    lastName: string | null;
+    user: { email: string };
+  };
 }
 
 export const paymentsApi = {
+  listAllOrders: async (params?: { parentId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.parentId) query.set("parentId", params.parentId);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    const res = await api.get<
+      PaymentOrder[] | PaginatedListResponse<PaymentOrder>
+    >(`/admin/orders${qs}`);
+    return asList<PaymentOrder>(res);
+  },
+
   listOrders: async (params?: {
     parentId?: string;
     status?: string;
@@ -73,21 +74,11 @@ export const paymentsApi = {
   refundOrder: (orderId: string) =>
     api.post<{ success: boolean }>(`/payments/orders/${orderId}/refund`),
 
-  getTutorPayouts: async (tutorId: string) => {
+  listPayouts: async () => {
     const res = await api.get<
       TutorPayout[] | PaginatedListResponse<TutorPayout>
-    >(`/revenue/admin/tutors/${tutorId}/payouts`);
+    >("/admin/payouts");
     return asList<TutorPayout>(res);
-  },
-
-  getTutorRevenue: (tutorId: string) =>
-    api.get<{ total: number }>(`/revenue/admin/tutors/${tutorId}`),
-
-  getTutorsWithPendingPayouts: async () => {
-    const res = await api.get<
-      TutorPendingPayout[] | PaginatedListResponse<TutorPendingPayout>
-    >("/revenue/admin/tutors/pending-payouts");
-    return asList<TutorPendingPayout>(res);
   },
 
   createPayout: (
@@ -98,6 +89,5 @@ export const paymentsApi = {
       reference?: string;
       status: "RECORDED" | "PAID" | "FAILED";
     },
-  ) =>
-    api.post<TutorPayout>(`/revenue/admin/tutors/${tutorId}/payouts`, payload),
+  ) => api.post<TutorPayout>(`/admin/tutors/${tutorId}/payouts`, payload),
 };

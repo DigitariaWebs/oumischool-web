@@ -10,6 +10,8 @@ export interface AdminTutorUser {
 export interface AdminTutor {
   id: string;
   userId: string;
+  firstName: string | null;
+  lastName: string | null;
   bio: string | null;
   hourlyRate: number;
   subjects: string[];
@@ -47,6 +49,8 @@ export interface AdminTutorDetail extends AdminTutor {
 
 export interface CreateAdminTutorPayload {
   email: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   experience?: string;
   password?: string;

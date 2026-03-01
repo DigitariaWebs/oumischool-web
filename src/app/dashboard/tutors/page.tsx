@@ -87,7 +87,9 @@ function adaptTutor(t: AdminTutor): Tutor {
   const email = String(t.user?.email ?? "");
   return {
     id: t.id,
-    name: (email.split("@")[0] || "Tutor").replace(/[._]/g, " "),
+    name:
+      `${t.firstName ?? ""} ${t.lastName ?? ""}`.trim() ||
+      (email.split("@")[0] || "Tutor").replace(/[._]/g, " "),
     email: email || "—",
     phone: "—",
     subjectIds,
@@ -647,6 +649,8 @@ function buildPendingColumns(
 
 const defaultFormState = {
   email: "",
+  firstName: "",
+  lastName: "",
   phone: "",
   experience: "",
 };
@@ -698,6 +702,8 @@ export default function TutorsPage() {
     try {
       await createTutor.mutateAsync({
         email: form.email,
+        firstName: form.firstName || undefined,
+        lastName: form.lastName || undefined,
         phone: form.phone || undefined,
         experience: form.experience || undefined,
       });
@@ -927,17 +933,41 @@ export default function TutorsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="tutor-email">E-mail</Label>
+              <Label htmlFor="tutor-firstname">Prénom</Label>
               <Input
-                id="tutor-email"
-                type="email"
-                placeholder="tutor@oumischool.com"
-                value={form.email}
+                id="tutor-firstname"
+                placeholder="Prénom"
+                value={form.firstName}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, email: e.target.value }))
+                  setForm((f) => ({ ...f, firstName: e.target.value }))
                 }
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tutor-lastname">Nom</Label>
+              <Input
+                id="tutor-lastname"
+                placeholder="Nom de famille"
+                value={form.lastName}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, lastName: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tutor-email">E-mail</Label>
+            <Input
+              id="tutor-email"
+              type="email"
+              placeholder="tutor@oumischool.com"
+              value={form.email}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="tutor-phone">Téléphone</Label>
               <Input
@@ -949,17 +979,17 @@ export default function TutorsPage() {
                 }
               />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="tutor-experience">Expérience</Label>
-            <Input
-              id="tutor-experience"
-              placeholder="ex. 3 ans"
-              value={form.experience}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, experience: e.target.value }))
-              }
-            />
+            <div className="space-y-1.5">
+              <Label htmlFor="tutor-experience">Expérience</Label>
+              <Input
+                id="tutor-experience"
+                placeholder="ex. 3 ans"
+                value={form.experience}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, experience: e.target.value }))
+                }
+              />
+            </div>
           </div>
           {createTutor.isError && (
             <p className="text-xs text-destructive">

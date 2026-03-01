@@ -14,7 +14,12 @@ import { Modal } from "@/components/ui/modal";
 import { PaymentStatusBadge, StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useParentDetail, useParents } from "@/hooks/parents";
-import { useOrders, useRefundOrder, PaymentOrder } from "@/hooks/payments";
+import {
+  useAllOrders,
+  useOrders,
+  useRefundOrder,
+  PaymentOrder,
+} from "@/hooks/payments";
 import {
   adaptParent,
   getPlanMeta,
@@ -212,8 +217,24 @@ function SubscriptionQuickView({ parentId }: { parentId: string }) {
 }
 
 function OrderQuickView({ order }: { order: PaymentOrder }) {
+  const parentName = order.parent
+    ? `${order.parent.firstName} ${order.parent.lastName}`.trim()
+    : (order.parentName ?? null);
+  const parentEmail = order.parent?.user?.email ?? order.parentEmail ?? null;
+
   return (
     <div className="space-y-4">
+      {(parentName || parentEmail) && (
+        <div className="rounded-lg border border-border/50 px-3 py-2">
+          <p className="text-[10px] uppercase text-muted-foreground">Parent</p>
+          {parentName && (
+            <p className="text-sm font-medium text-foreground">{parentName}</p>
+          )}
+          {parentEmail && (
+            <p className="text-[11px] text-muted-foreground">{parentEmail}</p>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div
@@ -455,6 +476,25 @@ function buildOrderColumns(
 ): ColumnDef<PaymentOrder>[] {
   return [
     {
+      key: "parentId",
+      label: "Parent",
+      sortable: true,
+      render: (order) => {
+        const name = order.parent
+          ? `${order.parent.firstName} ${order.parent.lastName}`.trim()
+          : (order.parentName ?? "—");
+        const email = order.parent?.user?.email ?? order.parentEmail;
+        return (
+          <div>
+            <p className="text-sm font-medium text-foreground">{name}</p>
+            {email && (
+              <p className="text-[11px] text-muted-foreground">{email}</p>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       key: "id",
       label: "Commande",
       sortable: false,
@@ -544,7 +584,7 @@ function buildOrderColumns(
       ),
     },
     {
-      key: "id",
+      key: "actions",
       label: "Actions",
       sortable: false,
       render: (order) => (
@@ -622,9 +662,7 @@ const orderFilters = [
 
 export default function SubscriptionsPage() {
   const { data: parentsData = [], isLoading: parentsLoading } = useParents();
-  const { data: ordersData = [], isLoading: ordersLoading } = useOrders({
-    limit: 100,
-  });
+  const { data: ordersData = [], isLoading: ordersLoading } = useAllOrders();
   const refundMutation = useRefundOrder();
 
   const [viewParent, setViewParent] = useState<Parent | null>(null);

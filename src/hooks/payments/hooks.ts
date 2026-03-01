@@ -4,6 +4,13 @@ import { paymentsApi } from "./api";
 import { paymentsKeys } from "./keys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
+export function useAllOrders(params?: { parentId?: string }) {
+  return useQuery({
+    queryKey: [...paymentsKeys.allOrders(), params?.parentId],
+    queryFn: () => paymentsApi.listAllOrders(params),
+  });
+}
+
 export function useOrders(params?: {
   parentId?: string;
   status?: string;
@@ -28,26 +35,10 @@ export function useRefundOrder() {
   });
 }
 
-export function useTutorPayouts(tutorId: string) {
+export function usePayouts() {
   return useQuery({
-    queryKey: paymentsKeys.tutorPayouts(tutorId),
-    queryFn: () => paymentsApi.getTutorPayouts(tutorId),
-    enabled: !!tutorId,
-  });
-}
-
-export function useTutorRevenue(tutorId: string) {
-  return useQuery({
-    queryKey: [...paymentsKeys.payouts(tutorId), "revenue"],
-    queryFn: () => paymentsApi.getTutorRevenue(tutorId),
-    enabled: !!tutorId,
-  });
-}
-
-export function useTutorsWithPendingPayouts() {
-  return useQuery({
-    queryKey: [...paymentsKeys.all, "tutors-pending-payouts"],
-    queryFn: () => paymentsApi.getTutorsWithPendingPayouts(),
+    queryKey: [...paymentsKeys.all, "payouts"],
+    queryFn: () => paymentsApi.listPayouts(),
   });
 }
 
