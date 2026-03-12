@@ -1,7 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
+import { PdfViewer } from "@/components/ui/pdf-viewer";
 import {
   Select,
   SelectContent,
@@ -10,37 +13,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TagsInput } from "@/components/ui/tags-input";
 import {
-  useArchiveResource,
+  useResourceActivity,
   useResourceDetail,
+  useUpdateResource,
   useUpdateResourceStatus,
 } from "@/hooks/resources";
 import type { AdminResource } from "@/hooks/resources/api";
-import { Resource, ResourceStatus, ResourceType } from "@/types";
+import { api, getAuthToken } from "@/lib/api-client";
+import { ResourceStatus } from "@/types";
+import { Resource, ResourceType } from "@/types";
+import { useQuery } from "@tanstack/react-query";
 import {
   Archive,
   ArrowLeft,
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  CircleX,
   Clock,
   Download,
   ExternalLink,
   Eye,
   File,
-  FileAudio,
-  FileImage,
   FileText,
   FileVideo,
+  Globe,
+  Library,
   Loader2,
+  Pencil,
+  Play,
+  Shield,
   Tag,
   User,
-  XCircle,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
 const RESOURCE_COLOR = "oklch(0.60 0.18 20)";
 
@@ -54,20 +65,9 @@ function normalizeStatus(status: unknown): ResourceStatus {
 function normalizeType(type: unknown): ResourceType {
   const normalized = String(type ?? "").toLowerCase();
   if (normalized === "video") return "video";
-  if (normalized === "audio") return "audio";
-  if (normalized === "image") return "image";
+  if (normalized === "interactive") return "interactive";
   if (normalized === "document") return "document";
-  return "other";
-}
-
-function resolveApiResourceUrl(fileUrl: string | null | undefined): string {
-  const raw = typeof fileUrl === "string" ? fileUrl.trim() : "";
-  if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  const base = (
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
-  ).replace(/\/+$/, "");
-  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+  return "document";
 }
 
 function adaptResource(resource: AdminResource): Resource {
@@ -82,6 +82,7 @@ function adaptResource(resource: AdminResource): Resource {
     views: resource.views,
     downloads: resource.downloads,
     uploadedBy: resource.uploader?.email ?? "—",
+    uploaderRole: resource.uploader?.role ?? "",
     uploadedDate: new Date(resource.createdAt).toLocaleDateString("fr-FR", {
       month: "long",
       day: "numeric",
@@ -100,25 +101,137 @@ const typeIcons: Record<
 > = {
   document: FileText,
   video: FileVideo,
-  audio: FileAudio,
-  image: FileImage,
-  other: File,
+  interactive: Globe,
 };
 
 const typeColors: Record<Resource["type"], { color: string; bg: string }> = {
   document: { color: "oklch(0.52 0.14 250)", bg: "oklch(0.93 0.02 250)" },
   video: { color: "oklch(0.58 0.16 155)", bg: "oklch(0.95 0.018 155)" },
-  audio: { color: "oklch(0.68 0.18 20)", bg: "oklch(0.96 0.025 20)" },
-  image: { color: "oklch(0.62 0.16 340)", bg: "oklch(0.96 0.02 340)" },
-  other: { color: "oklch(0.52 0.02 250)", bg: "oklch(0.94 0.008 80)" },
+  interactive: { color: "oklch(0.55 0.15 195)", bg: "oklch(0.94 0.04 195)" },
 };
 
+function useFileBlobUrl(url: string | null): {
+  blobUrl: string | null;
+  loading: boolean;
+  error: boolean;
+} {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const objectUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+
+    const token = getAuthToken();
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+        const next = URL.createObjectURL(blob);
+        objectUrlRef.current = next;
+        setBlobUrl(next);
+        setResolvedUrl(url);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true);
+          setResolvedUrl(url);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      setBlobUrl(null);
+      setResolvedUrl(null);
+      setError(false);
+    };
+  }, [url]);
+
+  // loading = URL is set but hasn't resolved yet (no blob, no error)
+  const loading = url !== null && resolvedUrl !== url && !error;
+
+  return { blobUrl, loading, error };
+}
+
 function FilePreview({ resource }: { resource: Resource }) {
-  const url = resolveApiResourceUrl(resource.fileUrl);
+  const BASE = (
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  ).replace(/\/+$/, "");
+  const adminFileUrl = resource.fileUrl
+    ? `${BASE}/admin/resources/${resource.id}/file`
+    : null;
+
+  const isPdf = /\.pdf$/i.test(resource.fileUrl ?? "");
+  const needsBlob =
+    (resource.type === "document" && isPdf) || resource.type === "video";
+
+  const { blobUrl, loading, error } = useFileBlobUrl(
+    needsBlob && adminFileUrl ? adminFileUrl : null,
+  );
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+
   const TypeIcon = typeIcons[resource.type];
   const typeStyle = typeColors[resource.type];
 
-  if (!url) {
+  const handleDownload = async () => {
+    if (!adminFileUrl) return;
+    if (blobUrl) {
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = resource.fileUrl?.split("/").pop() ?? resource.title;
+      a.click();
+      return;
+    }
+    setDownloadLoading(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`${adminFileUrl}?download=1`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = resource.fileUrl?.split("/").pop() ?? resource.title;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  const DownloadBtn = () => (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={!adminFileUrl || downloadLoading}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+    >
+      {downloadLoading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      Télécharger
+    </button>
+  );
+
+  if (!adminFileUrl) {
     return (
       <div className="dash-card p-8 flex flex-col items-center justify-center text-center">
         <File className="h-12 w-12 text-muted-foreground/30 mb-4" />
@@ -130,82 +243,100 @@ function FilePreview({ resource }: { resource: Resource }) {
     );
   }
 
-  if (resource.type === "image") {
+  /* ── Loading state for fetched types ── */
+  if (needsBlob && loading) {
+    return (
+      <div className="dash-card flex h-48 items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">
+            Chargement du fichier…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── PDF ── */
+  if (resource.type === "document" && isPdf) {
     return (
       <div className="dash-card overflow-hidden">
-        <div className="relative aspect-video bg-muted/30">
-          <img
-            src={url}
-            alt={resource.title}
-            className="w-full h-full object-contain"
+        <div
+          className="flex items-center justify-between border-b border-border/60 px-4 py-2.5"
+          style={{ background: typeColors.document.bg }}
+        >
+          <span
+            className="flex items-center gap-2 text-xs font-medium"
+            style={{ color: typeColors.document.color }}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Aperçu du document
+            {resource.fileSize && resource.fileSize !== "—" && (
+              <span className="font-normal opacity-70">
+                · {resource.fileSize}
+              </span>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            {blobUrl && (
+              <button
+                type="button"
+                onClick={() => window.open(blobUrl, "_blank")}
+                className="flex items-center gap-1 text-xs transition-opacity hover:opacity-70"
+                style={{ color: typeColors.document.color }}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Ouvrir
+              </button>
+            )}
+            <DownloadBtn />
+          </div>
+        </div>
+        {error ? (
+          <div className="flex h-48 items-center justify-center">
+            <span className="text-sm text-destructive">
+              Impossible de charger le document.
+            </span>
+          </div>
+        ) : blobUrl ? (
+          <PdfViewer blobUrl={blobUrl} />
+        ) : null}
+      </div>
+    );
+  }
+
+  /* ── Video ── */
+  if (resource.type === "video") {
+    return (
+      <div className="dash-card overflow-hidden">
+        {error ? (
+          <div className="flex h-48 items-center justify-center">
+            <span className="text-sm text-destructive">
+              Impossible de charger la vidéo.
+            </span>
+          </div>
+        ) : blobUrl ? (
+          <video
+            src={blobUrl}
+            controls
+            className="w-full bg-black"
+            style={{ maxHeight: "70vh" }}
           />
-        </div>
-        <div className="p-4 flex items-center justify-between border-t border-border/60">
+        ) : null}
+        <div className="flex items-center justify-between border-t border-border/60 px-4 py-3">
           <div className="flex items-center gap-2">
             <TypeIcon className="h-4 w-4" style={{ color: typeStyle.color }} />
             <span className="text-sm text-muted-foreground">
               {resource.fileSize}
             </span>
           </div>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ouvrir en grand
-          </a>
+          <DownloadBtn />
         </div>
       </div>
     );
   }
 
-  if (resource.type === "video" || resource.type === "audio") {
-    return (
-      <div className="dash-card overflow-hidden">
-        <div className="relative aspect-video bg-black/5 dark:bg-white/5 flex items-center justify-center">
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex flex-col items-center gap-3 p-8 rounded-2xl transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          >
-            <div
-              className="flex h-16 w-16 items-center justify-center rounded-2xl"
-              style={{ background: typeStyle.bg }}
-            >
-              <TypeIcon
-                className="h-8 w-8"
-                style={{ color: typeStyle.color }}
-              />
-            </div>
-            <span className="text-sm font-medium text-foreground">
-              {resource.type === "video" ? "Lire la vidéo" : "Lire l'audio"}
-            </span>
-          </a>
-        </div>
-        <div className="p-4 flex items-center justify-between border-t border-border/60">
-          <div className="flex items-center gap-2">
-            <TypeIcon className="h-4 w-4" style={{ color: typeStyle.color }} />
-            <span className="text-sm text-muted-foreground">
-              {resource.fileSize}
-            </span>
-          </div>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Télécharger
-          </a>
-        </div>
-      </div>
-    );
-  }
-
+  /* ── Non-PDF document / interactive fallback ── */
   return (
     <div className="dash-card p-6">
       <div className="flex items-center gap-4">
@@ -221,26 +352,255 @@ function FilePreview({ resource }: { resource: Resource }) {
           </p>
           <p className="text-xs text-muted-foreground">{resource.fileSize}</p>
         </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Ouvrir
-        </a>
+        <DownloadBtn />
       </div>
     </div>
   );
 }
 
-function ResourceOverviewTab({ resource }: { resource: Resource }) {
+function ActivitySection({
+  resourceId,
+  isPaid,
+}: {
+  resourceId: string;
+  isPaid: boolean;
+}) {
+  const { data: activity, isLoading } = useResourceActivity(resourceId);
+
+  const totalRevenue =
+    activity?.type === "orders"
+      ? activity.entries.reduce(
+          (s, e) => s + (e.status === "PAID" ? e.amount : 0),
+          0,
+        )
+      : 0;
+  const refunds =
+    activity?.type === "orders"
+      ? activity.entries.filter((e) => e.status === "REFUNDED").length
+      : 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary cards — paid only */}
+      {isPaid && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="dash-card p-4 flex flex-col gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{ background: "oklch(0.95 0.018 155)" }}
+            >
+              <Users
+                className="h-4 w-4"
+                style={{ color: "oklch(0.58 0.16 155)" }}
+              />
+            </div>
+            <p className="text-lg font-bold text-foreground">
+              {isLoading ? "—" : (activity?.entries.length ?? 0)}
+            </p>
+            <p className="text-xs text-muted-foreground">Achats totaux</p>
+          </div>
+          <div className="dash-card p-4 flex flex-col gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{ background: "oklch(0.95 0.025 155)" }}
+            >
+              <span
+                className="text-sm font-bold"
+                style={{ color: "oklch(0.45 0.14 155)" }}
+              >
+                $
+              </span>
+            </div>
+            <p className="text-lg font-bold text-foreground">
+              {isLoading ? "—" : `$${(totalRevenue / 100).toFixed(2)}`}
+            </p>
+            <p className="text-xs text-muted-foreground">Revenus totaux</p>
+          </div>
+          <div className="dash-card p-4 flex flex-col gap-2">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{ background: "oklch(0.95 0.02 250)" }}
+            >
+              <CircleX
+                className="h-4 w-4"
+                style={{ color: "oklch(0.52 0.14 250)" }}
+              />
+            </div>
+            <p className="text-lg font-bold text-foreground">
+              {isLoading ? "—" : refunds}
+            </p>
+            <p className="text-xs text-muted-foreground">Remboursements</p>
+          </div>
+        </div>
+      )}
+
+      {/* Log table */}
+      <div className="dash-card overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3.5">
+          {isPaid ? (
+            <Download className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <Library className="h-4 w-4 text-muted-foreground" />
+          )}
+          <h2 className="text-sm font-semibold text-foreground">
+            {isPaid ? "Historique des achats" : "Bibliothèque — ajouts"}
+          </h2>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : !activity || activity.entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-center">
+            {isPaid ? (
+              <Download className="h-9 w-9 text-muted-foreground/30 mb-3" />
+            ) : (
+              <Library className="h-9 w-9 text-muted-foreground/30 mb-3" />
+            )}
+            <p className="text-sm font-medium text-foreground">
+              {isPaid ? "Aucun achat" : "Aucun ajout"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isPaid
+                ? "L'historique apparaîtra ici après le premier achat."
+                : "Les ajouts à la bibliothèque apparaîtront ici."}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {activity.entries.map((entry) => {
+              const isOrder = activity.type === "orders";
+              const order = isOrder
+                ? (entry as (typeof activity.entries)[0] & {
+                    amount: number;
+                    status: string;
+                  })
+                : null;
+              const isPaid_ = order?.status === "PAID";
+              return (
+                <div
+                  key={entry.id}
+                  className="flex items-center gap-4 px-5 py-3.5"
+                >
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
+                    style={{
+                      background: isOrder
+                        ? isPaid_
+                          ? "oklch(0.95 0.018 155)"
+                          : "oklch(0.95 0.02 250)"
+                        : "oklch(0.93 0.025 280)",
+                    }}
+                  >
+                    {isOrder ? (
+                      isPaid_ ? (
+                        <CheckCircle2
+                          className="h-4 w-4"
+                          style={{ color: "oklch(0.58 0.16 155)" }}
+                        />
+                      ) : (
+                        <CircleX
+                          className="h-4 w-4"
+                          style={{ color: "oklch(0.52 0.14 250)" }}
+                        />
+                      )
+                    ) : (
+                      <Library
+                        className="h-4 w-4"
+                        style={{ color: "oklch(0.48 0.18 280)" }}
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-foreground truncate max-w-xs">
+                        {entry.email}
+                      </p>
+                      {isOrder && order && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background: isPaid_
+                              ? "oklch(0.95 0.018 155)"
+                              : "oklch(0.95 0.02 250)",
+                            color: isPaid_
+                              ? "oklch(0.45 0.14 155)"
+                              : "oklch(0.52 0.14 250)",
+                          }}
+                        >
+                          {isPaid_ ? "Payé" : "Remboursé"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(entry.date).toLocaleDateString("fr-FR", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  {isOrder && order && (
+                    <p className="text-sm font-bold text-foreground shrink-0">
+                      ${(order.amount / 100).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResourceDetailBody({
+  resource,
+  onPreview,
+}: {
+  resource: Resource;
+  onPreview: () => void;
+}) {
   const TypeIcon = typeIcons[resource.type];
   const typeStyle = typeColors[resource.type];
+  const canPreview =
+    (resource.type === "document" && /\.pdf$/i.test(resource.fileUrl ?? "")) ||
+    resource.type === "video";
+
+  const BASE = (
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  ).replace(/\/+$/, "");
+  const adminFileUrl = resource.fileUrl
+    ? `${BASE}/admin/resources/${resource.id}/file`
+    : null;
+  const [downloadLoading, setDownloadLoading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!adminFileUrl) return;
+    setDownloadLoading(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`${adminFileUrl}?download=1`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = resource.fileUrl?.split("/").pop() ?? resource.title;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           {
@@ -321,32 +681,82 @@ function ResourceOverviewTab({ resource }: { resource: Resource }) {
         })}
       </div>
 
+      {/* File card */}
       <div className="dash-card p-5">
         <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
           <File className="h-4 w-4 text-muted-foreground" />
-          Informations de la ressource
+          Fichier
+        </h2>
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: typeStyle.bg }}
+          >
+            <TypeIcon className="h-6 w-6" style={{ color: typeStyle.color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">
+              {resource.fileUrl?.split("/").pop() ?? resource.title}
+            </p>
+            <p className="text-xs text-muted-foreground capitalize">
+              {resource.type} · {resource.fileSize}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {canPreview && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 rounded-lg px-3 text-xs"
+                onClick={onPreview}
+              >
+                <Play className="h-3.5 w-3.5" />
+                Prévisualiser
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 rounded-lg px-3 text-xs"
+              onClick={handleDownload}
+              disabled={!adminFileUrl || downloadLoading}
+            >
+              {downloadLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Télécharger
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Resource info */}
+      <div className="dash-card p-5">
+        <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
+          <File className="h-4 w-4 text-muted-foreground" />
+          Informations
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Titre", value: resource.title },
             { label: "Type", value: resource.type },
             { label: "Matière", value: resource.subject },
             { label: "Taille", value: resource.fileSize },
-            { label: "Statut", value: resource.status },
             {
               label: "Prix",
               value: resource.isPaid
-                ? `${(resource.price ?? 0) / 100} CAD`
+                ? `$${((resource.price ?? 0) / 100).toFixed(2)} CAD`
                 : "Gratuit",
             },
             { label: "Ajouté par", value: resource.uploadedBy },
             { label: "Date d'ajout", value: resource.uploadedDate },
-          ].map((item, index) => (
-            <div key={`${item.label}-${index}`}>
+          ].map((item, i) => (
+            <div key={i}>
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
                 {item.label}
               </p>
-              <p className="text-sm font-medium text-foreground mt-0.5 truncate">
+              <p className="text-sm font-medium text-foreground mt-0.5 truncate capitalize">
                 {item.value}
               </p>
             </div>
@@ -354,6 +764,7 @@ function ResourceOverviewTab({ resource }: { resource: Resource }) {
         </div>
       </div>
 
+      {/* Description */}
       {resource.description && (
         <div className="dash-card p-5">
           <h2 className="mb-3 text-sm font-semibold text-foreground flex items-center gap-2">
@@ -366,6 +777,7 @@ function ResourceOverviewTab({ resource }: { resource: Resource }) {
         </div>
       )}
 
+      {/* Tags */}
       {resource.tags.length > 0 && (
         <div className="dash-card p-5">
           <h2 className="mb-3 text-sm font-semibold text-foreground flex items-center gap-2">
@@ -389,231 +801,28 @@ function ResourceOverviewTab({ resource }: { resource: Resource }) {
           </div>
         </div>
       )}
+
+      {/* Activity */}
+      <ActivitySection
+        resourceId={resource.id}
+        isPaid={resource.isPaid ?? false}
+      />
     </div>
   );
 }
 
-function ResourceFileTab({ resource }: { resource: Resource }) {
-  return (
-    <div className="space-y-6">
-      <FilePreview resource={resource} />
-
-      <div className="dash-card p-5">
-        <h2 className="mb-4 text-sm font-semibold text-foreground flex items-center gap-2">
-          <Download className="h-4 w-4 text-muted-foreground" />
-          Statistiques du fichier
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-              Taille
-            </p>
-            <p className="text-sm font-medium text-foreground mt-0.5">
-              {resource.fileSize}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-              Téléchargements
-            </p>
-            <p className="text-sm font-medium text-foreground mt-0.5">
-              {resource.downloads.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-              Vues
-            </p>
-            <p className="text-sm font-medium text-foreground mt-0.5">
-              {resource.views.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
-              Format
-            </p>
-            <p className="text-sm font-medium text-foreground mt-0.5 capitalize">
-              {resource.type}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface SubjectOption {
+  id: string;
+  name: string;
 }
 
-function ResourcePurchasesTab({ resource }: { resource: Resource }) {
-  const purchases = [
-    {
-      id: "1",
-      user: "john@example.com",
-      date: "15 jan 2024",
-      amount: "9.99 CAD",
-      status: "paid",
-    },
-    {
-      id: "2",
-      user: "jane@example.com",
-      date: "14 jan 2024",
-      amount: "9.99 CAD",
-      status: "paid",
-    },
-    {
-      id: "3",
-      user: "bob@example.com",
-      date: "13 jan 2024",
-      amount: "9.99 CAD",
-      status: "refunded",
-    },
-  ];
-
-  if (!resource.isPaid) {
-    return (
-      <div className="dash-card overflow-hidden">
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <FileText className="h-10 w-10 text-muted-foreground/30 mb-4" />
-          <p className="text-sm font-medium text-foreground">
-            Ressource gratuite
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-            Cette ressource est gratuite, donc aucun achat n&apos;est requis.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="dash-card p-5 flex flex-col gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.95 0.018 155)" }}
-          >
-            <Download
-              className="h-4 w-4"
-              style={{ color: "oklch(0.58 0.16 155)" }}
-            />
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            {purchases.length}
-          </p>
-          <p className="text-xs text-muted-foreground">Achats totaux</p>
-        </div>
-        <div className="dash-card p-5 flex flex-col gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.95 0.025 155)" }}
-          >
-            <span
-              className="text-lg font-bold"
-              style={{ color: "oklch(0.45 0.14 155)" }}
-            >
-              $
-            </span>
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            ${(purchases.length * 9.99).toFixed(2)}
-          </p>
-          <p className="text-xs text-muted-foreground">Revenus totaux</p>
-        </div>
-        <div className="dash-card p-5 flex flex-col gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-xl"
-            style={{ background: "oklch(0.95 0.02 250)" }}
-          >
-            <XCircle
-              className="h-4 w-4"
-              style={{ color: "oklch(0.52 0.14 250)" }}
-            />
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            {purchases.filter((p) => p.status === "refunded").length}
-          </p>
-          <p className="text-xs text-muted-foreground">Remboursements</p>
-        </div>
-      </div>
-
-      <div className="dash-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
-          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Download className="h-4 w-4 text-muted-foreground" />
-            Historique des achats
-          </h2>
-        </div>
-
-        {purchases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Download className="h-10 w-10 text-muted-foreground/30 mb-4" />
-            <p className="text-sm font-medium text-foreground">Aucun achat</p>
-            <p className="mt-1 text-xs text-muted-foreground max-w-xs">
-              L&apos;historique des achats apparaîtra ici.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/40">
-            {purchases.map((purchase) => (
-              <div
-                key={purchase.id}
-                className="flex items-center gap-4 px-5 py-4"
-              >
-                <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                  style={{
-                    background:
-                      purchase.status === "paid"
-                        ? "oklch(0.95 0.018 155)"
-                        : "oklch(0.95 0.02 250)",
-                  }}
-                >
-                  {purchase.status === "paid" ? (
-                    <CheckCircle2
-                      className="h-4 w-4"
-                      style={{ color: "oklch(0.58 0.16 155)" }}
-                    />
-                  ) : (
-                    <XCircle
-                      className="h-4 w-4"
-                      style={{ color: "oklch(0.52 0.14 250)" }}
-                    />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {purchase.user}
-                    </p>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                      style={{
-                        background:
-                          purchase.status === "paid"
-                            ? "oklch(0.95 0.018 155)"
-                            : "oklch(0.95 0.02 250)",
-                        color:
-                          purchase.status === "paid"
-                            ? "oklch(0.45 0.14 155)"
-                            : "oklch(0.52 0.14 250)",
-                      }}
-                    >
-                      {purchase.status === "paid" ? "Payé" : "Remboursé"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {purchase.date}
-                  </p>
-                </div>
-                <p className="text-sm font-bold text-foreground">
-                  {purchase.amount}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+interface EditForm {
+  title: string;
+  description: string;
+  subject: string;
+  tags: string[];
+  isPaid: boolean;
+  price: string;
 }
 
 export default function ResourceDetailPage({
@@ -624,10 +833,24 @@ export default function ResourceDetailPage({
   const { id } = use(params);
   const { data: resourceData, isLoading } = useResourceDetail(id);
   const updateStatus = useUpdateResourceStatus();
-  const archiveResource = useArchiveResource();
-  const [confirmAction, setConfirmAction] = useState<
-    "archive" | "delete" | null
-  >(null);
+  const updateResource = useUpdateResource();
+  const { data: subjects = [] } = useQuery({
+    queryKey: ["subjects"],
+    queryFn: () => api.get<SubjectOption[]>("/subjects"),
+  });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ResourceStatus | null>(
+    null,
+  );
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm>({
+    title: "",
+    description: "",
+    subject: "",
+    tags: [],
+    isPaid: false,
+    price: "",
+  });
 
   if (!isLoading && !resourceData) notFound();
   if (!resourceData) {
@@ -642,14 +865,50 @@ export default function ResourceDetailPage({
   const resource = adaptResource(resourceData);
   const TypeIcon = typeIcons[resource.type];
   const typeStyle = typeColors[resource.type];
+  const isPlatformResource = resource.uploaderRole === "ADMIN";
 
-  const handleArchive = async () => {
-    await archiveResource.mutateAsync(id).catch(() => {});
+  const handleStatusChange = (newStatus: string) => {
+    if (newStatus === resource.status) return;
+    setConfirmAction(newStatus as ResourceStatus);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!confirmAction) return;
+    await updateStatus
+      .mutateAsync({ id, status: confirmAction })
+      .catch(() => {});
     setConfirmAction(null);
   };
 
-  const handleStatusChange = async (newStatus: string) => {
-    await updateStatus.mutateAsync({ id, status: newStatus }).catch(() => {});
+  const openEditModal = () => {
+    setEditForm({
+      title: resource.title,
+      description: resource.description,
+      subject: resource.subject,
+      tags: resource.tags,
+      isPaid: resource.isPaid ?? false,
+      price: resource.price ? String(resource.price / 100) : "",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEdit = async () => {
+    await updateResource.mutateAsync({
+      id,
+      body: {
+        title: editForm.title,
+        description: editForm.description,
+        subject: editForm.subject,
+
+        tags: editForm.tags,
+        isPaid: editForm.isPaid,
+        price:
+          editForm.isPaid && editForm.price
+            ? Math.round(parseFloat(editForm.price) * 100)
+            : undefined,
+      },
+    });
+    setEditModalOpen(false);
   };
 
   return (
@@ -678,8 +937,19 @@ export default function ResourceDetailPage({
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {isPlatformResource && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 rounded-lg px-3 text-xs"
+                onClick={openEditModal}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Modifier
+              </Button>
+            )}
             <Select value={resource.status} onValueChange={handleStatusChange}>
-              <SelectTrigger className="h-7 w-32 text-xs gap-1.5">
+              <SelectTrigger className="h-7 w-36 text-xs gap-1.5">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -703,28 +973,6 @@ export default function ResourceDetailPage({
                 </SelectItem>
               </SelectContent>
             </Select>
-            {resource.status !== "archived" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 rounded-lg px-3 text-xs"
-                onClick={() => setConfirmAction("archive")}
-              >
-                <Archive className="h-3.5 w-3.5" />
-                Archiver
-              </Button>
-            )}
-            {resource.status === "archived" && (
-              <Button
-                size="sm"
-                className="h-7 gap-1.5 rounded-lg px-3 text-xs text-white"
-                style={{ background: "oklch(0.58 0.16 155)" }}
-                onClick={() => handleStatusChange("published")}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                Désarchiver
-              </Button>
-            )}
           </div>
         </div>
 
@@ -748,10 +996,23 @@ export default function ResourceDetailPage({
                 <BookOpen className="h-3 w-3" />
                 {resource.subject}
               </span>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <User className="h-3 w-3" />
-                {resource.uploadedBy}
-              </span>
+              {isPlatformResource ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    background: "oklch(0.93 0.025 280)",
+                    color: "oklch(0.48 0.18 280)",
+                  }}
+                >
+                  <Shield className="h-3 w-3" />
+                  Plateforme
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <User className="h-3 w-3" />
+                  {resource.uploadedBy}
+                </span>
+              )}
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <CalendarDays className="h-3 w-3" />
                 {resource.uploadedDate}
@@ -793,53 +1054,65 @@ export default function ResourceDetailPage({
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList
-              variant="line"
-              className="w-full justify-start border-b border-border/60 rounded-none pb-0 h-auto"
-            >
-              <TabsTrigger value="overview" className="gap-1.5 pb-3">
-                <File className="h-3.5 w-3.5" />
-                Vue générale
-              </TabsTrigger>
-              <TabsTrigger value="file" className="gap-1.5 pb-3">
-                <FileText className="h-3.5 w-3.5" />
-                Fichier
-              </TabsTrigger>
-              <TabsTrigger value="purchases" className="gap-1.5 pb-3">
-                <Download className="h-3.5 w-3.5" />
-                Achats
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview">
-              <ResourceOverviewTab resource={resource} />
-            </TabsContent>
-
-            <TabsContent value="file">
-              <ResourceFileTab resource={resource} />
-            </TabsContent>
-
-            <TabsContent value="purchases">
-              <ResourcePurchasesTab resource={resource} />
-            </TabsContent>
-          </Tabs>
+        <div className="p-6">
+          <ResourceDetailBody
+            resource={resource}
+            onPreview={() => setPreviewOpen(true)}
+          />
         </div>
       </div>
 
+      {/* ── Preview modal ── */}
       <Modal
-        open={confirmAction === "archive"}
+        open={previewOpen}
+        onOpenChange={(open) => !open && setPreviewOpen(false)}
+        type="form"
+        title={
+          resource.type === "video" ? "Aperçu vidéo" : "Aperçu du document"
+        }
+        description={resource.title}
+        size="lg"
+        actions={{
+          secondary: {
+            label: "Fermer",
+            onClick: () => setPreviewOpen(false),
+            variant: "outline",
+          },
+        }}
+      >
+        <FilePreview resource={resource} />
+      </Modal>
+
+      <Modal
+        open={confirmAction !== null}
         onOpenChange={(open) => !open && setConfirmAction(null)}
-        type="warning"
-        title="Archiver la ressource"
-        description={`Êtes-vous sûr de vouloir archiver "${resource.title}" ? Elle ne sera plus visible par les utilisateurs.`}
+        type={confirmAction === "archived" ? "warning" : "form"}
+        title={
+          confirmAction === "published"
+            ? "Publier la ressource"
+            : confirmAction === "draft"
+              ? "Passer en brouillon"
+              : "Archiver la ressource"
+        }
+        description={
+          confirmAction === "published"
+            ? `"${resource.title}" sera visible par tous les utilisateurs.`
+            : confirmAction === "draft"
+              ? `"${resource.title}" sera masquée et repassera en brouillon.`
+              : `"${resource.title}" sera archivée et masquée des utilisateurs.`
+        }
         size="sm"
         actions={{
           primary: {
-            label: "Archiver",
-            onClick: handleArchive,
-            variant: "destructive",
+            label: updateStatus.isPending
+              ? "Enregistrement…"
+              : confirmAction === "published"
+                ? "Publier"
+                : confirmAction === "draft"
+                  ? "Mettre en brouillon"
+                  : "Archiver",
+            onClick: handleConfirmStatusChange,
+            variant: confirmAction === "archived" ? "destructive" : "default",
           },
           secondary: {
             label: "Annuler",
@@ -861,6 +1134,131 @@ export default function ResourceDetailPage({
               {resource.subject} · {resource.type}
             </p>
           </div>
+        </div>
+      </Modal>
+
+      {/* ── Edit modal (platform resources only) ── */}
+      <Modal
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setEditModalOpen(false);
+        }}
+        type="form"
+        title="Modifier la ressource"
+        description="Modifiez les informations de cette ressource de la plateforme."
+        size="lg"
+        actions={{
+          primary: {
+            label: updateResource.isPending ? "Enregistrement…" : "Enregistrer",
+            onClick: handleEdit,
+          },
+          secondary: {
+            label: "Annuler",
+            onClick: () => setEditModalOpen(false),
+            variant: "outline",
+          },
+        }}
+      >
+        <div className="space-y-4">
+          {/* Title */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-title">Titre</Label>
+            <Input
+              id="edit-title"
+              value={editForm.title}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, title: e.target.value }))
+              }
+            />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-description">Description</Label>
+            <Input
+              id="edit-description"
+              value={editForm.description}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, description: e.target.value }))
+              }
+            />
+          </div>
+
+          {/* Subject */}
+          <div className="space-y-1.5">
+            <Label>Matière</Label>
+            <Select
+              value={editForm.subject}
+              onValueChange={(v) => setEditForm((f) => ({ ...f, subject: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner une matière" />
+              </SelectTrigger>
+              <SelectContent>
+                {subjects.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-1.5">
+            <Label>Tags</Label>
+            <TagsInput
+              value={editForm.tags}
+              onChange={(tags) => setEditForm((f) => ({ ...f, tags }))}
+            />
+          </div>
+
+          {/* Paid toggle */}
+          <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+            <input
+              id="edit-ispaid"
+              type="checkbox"
+              checked={editForm.isPaid}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, isPaid: e.target.checked }))
+              }
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
+            />
+            <div>
+              <Label
+                htmlFor="edit-ispaid"
+                className="mb-0 cursor-pointer text-sm"
+              >
+                Ressource payante
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Les étudiants devront acheter ou s&apos;abonner pour y accéder
+              </p>
+            </div>
+          </div>
+
+          {editForm.isPaid && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-price">Prix (CAD)</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="ex. 9.99"
+                value={editForm.price}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, price: e.target.value }))
+                }
+              />
+            </div>
+          )}
+
+          {updateResource.isError && (
+            <p className="text-xs text-destructive">
+              Impossible d&apos;enregistrer les modifications. Réessayez.
+            </p>
+          )}
         </div>
       </Modal>
     </div>

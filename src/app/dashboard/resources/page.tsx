@@ -1,5 +1,6 @@
 "use client";
 
+import { PdfPreview } from "./PdfPreview";
 import { DataTable } from "@/components/ui/DataTable";
 import type { ColumnDef } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/button";
@@ -22,9 +23,11 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TagsInput } from "@/components/ui/tags-input";
 import {
   useArchiveResource,
   useCreateResourceUpload,
+  useGenerateViewToken,
   useResources,
   useUpdateResourceStatus,
 } from "@/hooks/resources";
@@ -36,20 +39,21 @@ import {
   Archive,
   BookOpen,
   CheckCircle2,
+  Shield,
+  User2,
   Download,
   ExternalLink,
   Eye,
-  File,
   FileText,
+  HardDrive,
   FileVideo,
-  Image,
+  Globe,
   Loader2,
   MoreHorizontal,
-  Music,
   Plus,
   Tag,
-  Trash2,
-  XCircle,
+  Upload,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -72,20 +76,8 @@ function normalizeStatus(status: unknown): ResourceStatus {
 function normalizeType(type: unknown): ResourceType {
   const normalized = String(type ?? "").toLowerCase();
   if (normalized === "video") return "video";
-  if (normalized === "audio") return "audio";
-  if (normalized === "image") return "image";
-  if (normalized === "document") return "document";
-  return "other";
-}
-
-function resolveApiResourceUrl(fileUrl: string | null | undefined): string {
-  const raw = typeof fileUrl === "string" ? fileUrl.trim() : "";
-  if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  const base = (
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
-  ).replace(/\/+$/, "");
-  return `${base}${raw.startsWith("/") ? "" : "/"}${raw}`;
+  if (normalized === "interactive") return "interactive";
+  return "document";
 }
 
 function adaptResource(resource: AdminResource): Resource {
@@ -100,6 +92,7 @@ function adaptResource(resource: AdminResource): Resource {
     views: resource.views,
     downloads: resource.downloads,
     uploadedBy: resource.uploader?.email ?? "—",
+    uploaderRole: resource.uploader?.role ?? "",
     uploadedDate: new Date(resource.createdAt).toLocaleDateString("fr-FR", {
       month: "short",
       year: "numeric",
@@ -117,17 +110,13 @@ const typeIcons: Record<
 > = {
   document: FileText,
   video: FileVideo,
-  audio: Music,
-  image: Image,
-  other: File,
+  interactive: Globe,
 };
 
 const typeColors: Record<Resource["type"], { color: string; bg: string }> = {
   document: { color: "oklch(0.52 0.14 250)", bg: "oklch(0.93 0.02 250)" },
   video: { color: "oklch(0.58 0.16 155)", bg: "oklch(0.95 0.018 155)" },
-  audio: { color: "oklch(0.68 0.18 20)", bg: "oklch(0.96 0.025 20)" },
-  image: { color: "oklch(0.62 0.16 340)", bg: "oklch(0.96 0.02 340)" },
-  other: { color: "oklch(0.52 0.02 250)", bg: "oklch(0.94 0.008 80)" },
+  interactive: { color: "oklch(0.55 0.15 195)", bg: "oklch(0.94 0.04 195)" },
 };
 
 const subjectColors: Record<string, string> = {
@@ -143,7 +132,6 @@ const subjectColors: Record<string, string> = {
 function ResourceQuickView({ resource }: { resource: Resource }) {
   const TypeIcon = typeIcons[resource.type];
   const typeStyle = typeColors[resource.type];
-  const url = resolveApiResourceUrl(resource.fileUrl);
 
   return (
     <div className="space-y-6">
@@ -244,7 +232,7 @@ function ResourceQuickView({ resource }: { resource: Resource }) {
       <div className="grid grid-cols-2 gap-3">
         {[
           { icon: BookOpen, label: resource.subject },
-          { icon: File, label: resource.fileSize },
+          { icon: HardDrive, label: resource.fileSize },
           { icon: Tag, label: resource.uploadedBy },
           { icon: ExternalLink, label: resource.uploadedDate },
         ].map(({ icon: Icon, label }, index) => (
@@ -280,18 +268,6 @@ function ResourceQuickView({ resource }: { resource: Resource }) {
           </div>
         </div>
       )}
-
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 rounded-xl border border-border/60 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Ouvrir le fichier
-        </a>
-      )}
     </div>
   );
 }
@@ -301,14 +277,14 @@ function ResourceActions({
   onView,
   onArchive,
   onUnarchive,
+  onPreviewInteractive,
 }: {
   resource: Resource;
   onView: (r: Resource) => void;
   onArchive?: (r: Resource) => void;
   onUnarchive?: (r: Resource) => void;
+  onPreviewInteractive?: (r: Resource) => void;
 }) {
-  const url = resolveApiResourceUrl(resource.fileUrl);
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -334,14 +310,16 @@ function ResourceActions({
             Profil complet
           </Link>
         </DropdownMenuItem>
-        {url && (
-          <DropdownMenuItem className="gap-2 text-xs" asChild>
-            <a href={url} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Ouvrir le fichier
-            </a>
+        {resource.type === "interactive" && onPreviewInteractive && (
+          <DropdownMenuItem
+            className="gap-2 text-xs"
+            onClick={() => onPreviewInteractive(resource)}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Voir
           </DropdownMenuItem>
         )}
+
         <DropdownMenuSeparator />
         {resource.status === "archived" && onUnarchive && (
           <DropdownMenuItem
@@ -371,6 +349,7 @@ function buildColumns(
   onView: (r: Resource) => void,
   onArchive?: (r: Resource) => void,
   onUnarchive?: (r: Resource) => void,
+  onPreviewInteractive?: (r: Resource) => void,
 ): ColumnDef<Resource>[] {
   return [
     {
@@ -513,6 +492,39 @@ function buildColumns(
       },
     },
     {
+      key: "uploadedBy",
+      label: "Ajouté par",
+      sortable: false,
+      render: (resource) => {
+        const isPlatform = resource.uploaderRole === "ADMIN";
+        if (isPlatform) {
+          return (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              style={{
+                background: "oklch(0.93 0.025 280)",
+                color: "oklch(0.48 0.18 280)",
+              }}
+            >
+              <Shield className="h-3 w-3" />
+              Plateforme
+            </span>
+          );
+        }
+        return (
+          <div className="flex items-center gap-1.5">
+            <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span
+              className="max-w-36 truncate text-xs text-muted-foreground"
+              title={resource.uploadedBy}
+            >
+              {resource.uploadedBy}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       key: "uploadedDate",
       label: "Date",
       sortable: true,
@@ -532,6 +544,7 @@ function buildColumns(
           onView={onView}
           onArchive={onArchive}
           onUnarchive={onUnarchive}
+          onPreviewInteractive={onPreviewInteractive}
         />
       ),
     },
@@ -554,9 +567,7 @@ const filters = [
     options: [
       { label: "Document", value: "document" },
       { label: "Vidéo", value: "video" },
-      { label: "Audio", value: "audio" },
-      { label: "Image", value: "image" },
-      { label: "Autre", value: "other" },
+      { label: "Interactive", value: "interactive" },
     ],
   },
   {
@@ -580,7 +591,7 @@ const defaultFormState: {
   subject: string;
   type: ResourceType;
   status: ResourceStatus;
-  tags: string;
+  tags: string[];
   isPaid: boolean;
   price: string;
 } = {
@@ -589,7 +600,7 @@ const defaultFormState: {
   subject: "",
   type: "document",
   status: "draft",
-  tags: "",
+  tags: [],
   isPaid: false,
   price: "",
 };
@@ -624,6 +635,7 @@ export default function ResourcesPage() {
   const createResourceUpload = useCreateResourceUpload();
   const archiveResource = useArchiveResource();
   const updateResourceStatus = useUpdateResourceStatus();
+  const generateViewToken = useGenerateViewToken();
   const { data: subjects = [] } = useQuery({
     queryKey: ["subjects"],
     queryFn: () => api.get<SubjectOption[]>("/subjects"),
@@ -633,15 +645,30 @@ export default function ResourcesPage() {
   const [viewResource, setViewResource] = useState<Resource | null>(null);
   const [form, setForm] = useState(defaultFormState);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(
+      file.type.startsWith("video/") || file.type === "application/pdf"
+        ? URL.createObjectURL(file)
+        : null,
+    );
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  };
 
   const resources = resourcesData.map(adaptResource);
 
   const publishedResources = resources.filter((r) => r.status === "published");
   const draftResources = resources.filter((r) => r.status === "draft");
   const archivedResources = resources.filter((r) => r.status === "archived");
-
-  const totalViews = resources.reduce((acc, r) => acc + r.views, 0);
-  const totalDownloads = resources.reduce((acc, r) => acc + r.downloads, 0);
 
   const handleAdd = async () => {
     if (!form.title || !form.subject || !selectedFile) return;
@@ -651,7 +678,7 @@ export default function ResourcesPage() {
     payload.append("type", form.type);
     payload.append("status", form.status.toUpperCase());
     if (form.description) payload.append("description", form.description);
-    if (form.tags) payload.append("tags", form.tags);
+    if (form.tags.length > 0) payload.append("tags", JSON.stringify(form.tags));
     if (form.isPaid) {
       payload.append("isPaid", "true");
       if (form.price) {
@@ -679,7 +706,22 @@ export default function ResourcesPage() {
       .catch(() => {});
   };
 
-  const columns = buildColumns(setViewResource, handleArchive, handleUnarchive);
+  const handlePreviewInteractive = async (resource: Resource) => {
+    try {
+      const { token } = await generateViewToken.mutateAsync(resource.id);
+      const url = `${window.location.origin}/resource/${resource.id}/view?token=${token}`;
+      window.open(url, "_blank");
+    } catch {
+      // token generation failed — silent for now
+    }
+  };
+
+  const columns = buildColumns(
+    setViewResource,
+    handleArchive,
+    handleUnarchive,
+    handlePreviewInteractive,
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -882,11 +924,17 @@ export default function ResourcesPage() {
 
       <Modal
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForm(defaultFormState);
+            clearFile();
+          }
+          setModalOpen(open);
+        }}
         type="form"
         title="Ajouter une nouvelle ressource"
-        description="Téléchargez ou enregistrez une nouvelle ressource d'apprentissage."
-        size="md"
+        description="Téléchargez une nouvelle ressource d'apprentissage."
+        size="lg"
         actions={{
           primary: {
             label: createResourceUpload.isPending
@@ -898,14 +946,240 @@ export default function ResourcesPage() {
             label: "Annuler",
             onClick: () => {
               setForm(defaultFormState);
-              setSelectedFile(null);
+              clearFile();
               setModalOpen(false);
             },
             variant: "outline",
           },
         }}
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* ── Type selector ── */}
+          <div className="space-y-2">
+            <Label>Type de ressource</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  {
+                    type: "document" as const,
+                    Icon: FileText,
+                    label: "Document",
+                    hint: "PDF, Word, Excel, PPT…",
+                  },
+                  {
+                    type: "video" as const,
+                    Icon: FileVideo,
+                    label: "Vidéo",
+                    hint: "MP4, WebM, MOV, AVI",
+                  },
+                  {
+                    type: "interactive" as const,
+                    Icon: Globe,
+                    label: "Interactive",
+                    hint: "Fichier HTML",
+                  },
+                ] as const
+              ).map(({ type, Icon, label, hint }) => {
+                const selected = form.type === type;
+                const c = typeColors[type];
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      if (form.type !== type) {
+                        setForm((f) => ({ ...f, type }));
+                        clearFile();
+                      }
+                    }}
+                    className="flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all hover:border-current"
+                    style={
+                      selected
+                        ? {
+                            background: c.bg,
+                            borderColor: c.color,
+                            boxShadow: `0 0 0 1px ${c.color}`,
+                          }
+                        : {
+                            background: "transparent",
+                            borderColor: "hsl(var(--border))",
+                          }
+                    }
+                  >
+                    <div
+                      className="flex h-8 w-8 items-center justify-center rounded-lg"
+                      style={{
+                        background: selected
+                          ? c.color + "28"
+                          : "hsl(var(--muted))",
+                      }}
+                    >
+                      <Icon
+                        className="h-4 w-4"
+                        style={{
+                          color: selected
+                            ? c.color
+                            : "hsl(var(--muted-foreground))",
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-xs font-semibold"
+                      style={{
+                        color: selected ? c.color : "hsl(var(--foreground))",
+                      }}
+                    >
+                      {label}
+                    </span>
+                    <span className="text-[10px] leading-tight text-muted-foreground">
+                      {hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── File upload zone ── */}
+          <div className="space-y-2">
+            <Label>Fichier</Label>
+            <div
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFileSelect(file);
+              }}
+              onClick={() => document.getElementById("res-file-input")?.click()}
+              className="relative flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-colors"
+              style={{
+                borderColor: dragOver
+                  ? typeColors[form.type].color
+                  : selectedFile
+                    ? typeColors[form.type].color + "90"
+                    : "hsl(var(--border))",
+                background: dragOver
+                  ? typeColors[form.type].bg
+                  : selectedFile
+                    ? typeColors[form.type].bg
+                    : "hsl(var(--muted) / 0.3)",
+              }}
+            >
+              <input
+                id="res-file-input"
+                type="file"
+                className="sr-only"
+                accept={
+                  form.type === "document"
+                    ? ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt"
+                    : form.type === "video"
+                      ? ".mp4,.webm,.mov,.avi"
+                      : ".html"
+                }
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileSelect(file);
+                  e.target.value = "";
+                }}
+              />
+
+              {selectedFile ? (
+                <div className="flex flex-col items-center gap-1 px-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2
+                      className="h-4 w-4 shrink-0"
+                      style={{ color: typeColors[form.type].color }}
+                    />
+                    <span className="max-w-60 truncate text-xs font-medium text-foreground">
+                      {selectedFile.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearFile();
+                      }}
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    Glisser-déposer ou{" "}
+                    <span
+                      className="font-medium"
+                      style={{ color: typeColors[form.type].color }}
+                    >
+                      cliquer pour choisir
+                    </span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/70">
+                    {form.type === "document"
+                      ? "PDF, DOC, DOCX, PPT, XLS, TXT · max 75 MB"
+                      : form.type === "video"
+                        ? "MP4, WebM, MOV, AVI · max 75 MB"
+                        : "HTML uniquement · max 75 MB"}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Video preview */}
+            {previewUrl && form.type === "video" && (
+              <div className="overflow-hidden rounded-xl border border-border/60 bg-black">
+                <video
+                  src={previewUrl}
+                  controls
+                  className="max-h-52 w-full object-contain"
+                />
+              </div>
+            )}
+
+            {/* PDF preview */}
+            {previewUrl &&
+              form.type === "document" &&
+              selectedFile?.type === "application/pdf" && (
+                <div className="overflow-hidden rounded-xl border border-border/60">
+                  <div
+                    className="flex items-center justify-between border-b border-border/60 px-3 py-2"
+                    style={{ background: typeColors.document.bg }}
+                  >
+                    <span
+                      className="text-[11px] font-medium"
+                      style={{ color: typeColors.document.color }}
+                    >
+                      Aperçu PDF
+                    </span>
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[11px] transition-opacity hover:opacity-70"
+                      style={{ color: typeColors.document.color }}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Ouvrir
+                    </a>
+                  </div>
+                  <PdfPreview url={previewUrl} />
+                </div>
+              )}
+          </div>
+
+          {/* ── Title ── */}
           <div className="space-y-1.5">
             <Label htmlFor="res-title">Titre</Label>
             <Input
@@ -917,19 +1191,8 @@ export default function ResourcesPage() {
               }
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="res-file">Fichier</Label>
-            <Input
-              id="res-file"
-              type="file"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-            />
-            {selectedFile ? (
-              <p className="text-xs text-muted-foreground">
-                {selectedFile.name} ({Math.ceil(selectedFile.size / 1024)} KB)
-              </p>
-            ) : null}
-          </div>
+
+          {/* ── Description ── */}
           <div className="space-y-1.5">
             <Label htmlFor="res-description">Description</Label>
             <Input
@@ -941,6 +1204,8 @@ export default function ResourcesPage() {
               }
             />
           </div>
+
+          {/* ── Subject + Status ── */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Matière</Label>
@@ -961,28 +1226,6 @@ export default function ResourcesPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select
-                value={form.type}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, type: v as Resource["type"] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="document">Document</SelectItem>
-                  <SelectItem value="video">Vidéo</SelectItem>
-                  <SelectItem value="audio">Audio</SelectItem>
-                  <SelectItem value="image">Image</SelectItem>
-                  <SelectItem value="other">Autre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
               <Label>Statut</Label>
               <Select
                 value={form.status}
@@ -991,28 +1234,27 @@ export default function ResourcesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un statut" />
+                  <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="published">Publiée</SelectItem>
                   <SelectItem value="draft">Brouillon</SelectItem>
-                  <SelectItem value="archived">Archivée</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="res-tags">Tags</Label>
-              <Input
-                id="res-tags"
-                placeholder="séparés par virgule: tag1, tag2"
-                value={form.tags}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, tags: e.target.value }))
-                }
-              />
-            </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2.5">
+
+          {/* ── Tags ── */}
+          <div className="space-y-1.5">
+            <Label>Tags</Label>
+            <TagsInput
+              value={form.tags}
+              onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+            />
+          </div>
+
+          {/* ── Paid toggle ── */}
+          <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
             <input
               id="res-ispaid"
               type="checkbox"
@@ -1020,12 +1262,21 @@ export default function ResourcesPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, isPaid: e.target.checked }))
               }
-              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
             />
-            <Label htmlFor="res-ispaid" className="cursor-pointer mb-0">
-              Ressource payante
-            </Label>
+            <div>
+              <Label
+                htmlFor="res-ispaid"
+                className="mb-0 cursor-pointer text-sm"
+              >
+                Ressource payante
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Les étudiants devront acheter ou s&apos;abonner pour y accéder
+              </p>
+            </div>
           </div>
+
           {form.isPaid && (
             <div className="space-y-1.5">
               <Label htmlFor="res-price">Prix (CAD)</Label>
@@ -1042,9 +1293,11 @@ export default function ResourcesPage() {
               />
             </div>
           )}
+
           {createResourceUpload.isError && (
             <p className="text-xs text-destructive">
-              Impossible d&apos;ajouter la ressource.
+              Impossible d&apos;ajouter la ressource. Vérifiez le fichier et
+              réessayez.
             </p>
           )}
         </div>

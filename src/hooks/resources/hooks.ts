@@ -74,3 +74,17 @@ export function useArchiveResource() {
     },
   });
 }
+
+export function useGenerateViewToken() {
+  return useMutation({
+    mutationFn: (id: string) => resourcesApi.generateViewToken(id),
+  });
+}
+
+export function useResourceActivity(id: string) {
+  return useQuery({
+    queryKey: resourceKeys.detail(id).concat("activity") as unknown[],
+    queryFn: () => resourcesApi.getActivity(id),
+    enabled: !!id,
+  });
+}

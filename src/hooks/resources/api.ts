@@ -17,6 +17,7 @@ export interface AdminResource {
   uploader: {
     id: string;
     email: string;
+    role: string;
   } | null;
   createdAt: string;
   updatedAt: string;
@@ -33,7 +34,10 @@ export interface CreateResourcePayload {
   status?: string;
 }
 
-export type UpdateResourcePayload = Partial<CreateResourcePayload>;
+export type UpdateResourcePayload = Partial<CreateResourcePayload> & {
+  isPaid?: boolean;
+  price?: number;
+};
 
 export const resourcesApi = {
   list: async () => {
@@ -50,7 +54,36 @@ export const resourcesApi = {
   update: (id: string, body: UpdateResourcePayload) =>
     api.put<AdminResource>(`/resources/${id}`, body),
   updateStatus: (id: string, status: string) =>
-    api.put<AdminResource>(`/admin/resources/${id}/status`, { status }),
+    api.put<AdminResource>(`/admin/resources/${id}/status`, {
+      status: status.toUpperCase(),
+    }),
   archive: (id: string) =>
     api.post<unknown>(`/admin/resources/${id}/archive`, {}),
+  getActivity: (id: string) =>
+    api.get<ResourceActivity>(`/admin/resources/${id}/activity`),
+  generateViewToken: (id: string) =>
+    api.post<{ token: string; expiresAt: string }>(
+      `/resources/${id}/view-token`,
+      {},
+    ),
 };
+
+export type ResourceActivity =
+  | {
+      type: "orders";
+      entries: {
+        id: string;
+        email: string;
+        amount: number; // in cents
+        status: string;
+        date: string;
+      }[];
+    }
+  | {
+      type: "library";
+      entries: {
+        id: string;
+        email: string;
+        date: string;
+      }[];
+    };

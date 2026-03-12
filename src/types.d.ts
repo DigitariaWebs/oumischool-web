@@ -248,7 +248,7 @@ export interface Student {
   age: number;
 }
 
-export type ResourceType = "document" | "video" | "audio" | "image" | "other";
+export type ResourceType = "document" | "video" | "interactive";
 export type ResourceStatus = "published" | "draft" | "archived";
 
 export interface Resource {
@@ -262,6 +262,7 @@ export interface Resource {
   views: number;
   downloads: number;
   uploadedBy: string;
+  uploaderRole: string;
   uploadedDate: string;
   fileSize: string;
   tags: string[];
