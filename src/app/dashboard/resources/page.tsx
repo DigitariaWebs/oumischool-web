@@ -709,7 +709,10 @@ export default function ResourcesPage() {
   const handlePreviewInteractive = async (resource: Resource) => {
     try {
       const { token } = await generateViewToken.mutateAsync(resource.id);
-      const url = `${window.location.origin}/resource/${resource.id}/view?token=${token}`;
+      const apiBase = (
+        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+      ).replace(/\/+$/, "");
+      const url = `${apiBase}/resources/${resource.id}/view?token=${token}`;
       window.open(url, "_blank");
     } catch {
       // token generation failed — silent for now

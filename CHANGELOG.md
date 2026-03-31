@@ -7,21 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- PDF preview for documents in the resource list and detail pages
-- Tags input component for editing resource tags
-- Activity tab on the resource detail page
-- "Uploaded by" column showing platform or tutor origin
-- In-browser video playback on the resource detail page
-- Inline resource editing from the detail page
-- Authenticated file downloads
-
 ### Changed
 
-- Simplified resource types to document, video, and interactive
-- Redesigned resource list and detail pages
+- **Interactive resource preview:** Dashboard now opens interactive resources directly via API URL instead of proxying through a Next.js route
 
 ### Removed
 
-- Audio, image, and other resource types
+- **Resource view proxy route:** Deleted `app/resource/[id]/view/route.ts` — clients now hit the API directly, eliminating an unnecessary network hop
