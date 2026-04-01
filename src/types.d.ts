@@ -267,6 +267,7 @@ export interface Resource {
   fileSize: string;
   tags: string[];
   isPaid?: boolean;
+  isGame?: boolean;
   price?: number | null; // in cents
 }
 

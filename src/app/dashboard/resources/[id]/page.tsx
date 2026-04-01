@@ -91,6 +91,7 @@ function adaptResource(resource: AdminResource): Resource {
     fileSize: resource.fileSize ?? "—",
     tags: resource.tags,
     isPaid: resource.isPaid ?? false,
+    isGame: resource.isGame ?? false,
     price: resource.price ?? null,
   };
 }
@@ -822,6 +823,7 @@ interface EditForm {
   subject: string;
   tags: string[];
   isPaid: boolean;
+  isGame: boolean;
   price: string;
 }
 
@@ -849,6 +851,7 @@ export default function ResourceDetailPage({
     subject: "",
     tags: [],
     isPaid: false,
+    isGame: false,
     price: "",
   });
 
@@ -887,6 +890,7 @@ export default function ResourceDetailPage({
       subject: resource.subject,
       tags: resource.tags,
       isPaid: resource.isPaid ?? false,
+      isGame: resource.isGame ?? false,
       price: resource.price ? String(resource.price / 100) : "",
     });
     setEditModalOpen(true);
@@ -902,6 +906,7 @@ export default function ResourceDetailPage({
 
         tags: editForm.tags,
         isPaid: editForm.isPaid,
+        isGame: editForm.isGame,
         price:
           editForm.isPaid && editForm.price
             ? Math.round(parseFloat(editForm.price) * 100)
@@ -1011,6 +1016,18 @@ export default function ResourceDetailPage({
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <User className="h-3 w-3" />
                   {resource.uploadedBy}
+                </span>
+              )}
+              {resource.isGame && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    background: "oklch(0.93 0.025 145)",
+                    color: "oklch(0.42 0.15 145)",
+                  }}
+                >
+                  <Globe className="h-3 w-3" />
+                  Mini-jeu
                 </span>
               )}
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1236,6 +1253,33 @@ export default function ResourceDetailPage({
               </p>
             </div>
           </div>
+
+          {/* Mini-jeu toggle (interactive only) */}
+          {resource.type === "interactive" && (
+            <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+              <input
+                id="edit-isgame"
+                type="checkbox"
+                checked={editForm.isGame}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, isGame: e.target.checked }))
+                }
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-primary"
+              />
+              <div>
+                <Label
+                  htmlFor="edit-isgame"
+                  className="mb-0 cursor-pointer text-sm"
+                >
+                  Mini-jeu
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Apparaîtra dans l&apos;onglet Jeux des enfants au lieu de la
+                  bibliothèque
+                </p>
+              </div>
+            </div>
+          )}
 
           {editForm.isPaid && (
             <div className="space-y-1.5">

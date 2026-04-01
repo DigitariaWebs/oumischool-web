@@ -13,6 +13,7 @@ export interface AdminResource {
   downloads: number;
   tags: string[];
   isPaid: boolean;
+  isGame: boolean;
   price: number | null; // in cents
   uploader: {
     id: string;
@@ -36,6 +37,7 @@ export interface CreateResourcePayload {
 
 export type UpdateResourcePayload = Partial<CreateResourcePayload> & {
   isPaid?: boolean;
+  isGame?: boolean;
   price?: number;
 };
 
