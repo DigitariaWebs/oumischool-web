@@ -4,6 +4,8 @@ import { GenericSidebar } from "@/components/ui/generic-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/auth";
 import { clearAuthToken, getAuthToken } from "@/lib/api-client";
+import { mapBackendRole } from "@/lib/auth-role";
+import { useAuthStore } from "@/store/auth";
 import {
   Banknote,
   BookOpen,
@@ -90,27 +92,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const setUser = useAuthStore((s) => s.setUser);
   const hasToken = !!getAuthToken();
   const { data: profile, isLoading, isError } = useAuthProfile(hasToken);
 
   useEffect(() => {
     if (!hasToken) {
-      router.replace("/login");
+      router.replace("/sign-in");
       return;
     }
     if (isError) {
       clearAuthToken();
-      router.replace("/login");
+      router.replace("/sign-in");
       return;
     }
-    if (profile && String(profile.role).toUpperCase() !== "ADMIN") {
+    if (profile && mapBackendRole(profile.role) !== "admin") {
       clearAuthToken();
-      router.replace("/login?reason=admin_only");
+      router.replace("/sign-in?reason=role_blocked");
+      return;
     }
-  }, [hasToken, isError, profile, router]);
+    if (profile) {
+      setUser(profile);
+    }
+  }, [hasToken, isError, profile, router, setUser]);
 
   if (!hasToken || isLoading) return null;
-  if (profile && String(profile.role).toUpperCase() !== "ADMIN") return null;
+  if (profile && mapBackendRole(profile.role) !== "admin") return null;
 
   return (
     <SidebarProvider>
@@ -130,7 +137,7 @@ export default function DashboardLayout({
           showSearch={false}
           onLogout={() => {
             clearAuthToken();
-            router.replace("/login");
+            router.replace("/sign-in");
           }}
         />
         <main className="flex flex-1 flex-col overflow-hidden">{children}</main>

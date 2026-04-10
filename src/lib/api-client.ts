@@ -1,5 +1,15 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("auth_token") ?? null;
@@ -38,9 +48,28 @@ async function request<T>(
         : undefined,
   });
 
-  const json = await res.json();
-  if (!res.ok || !json.success) {
-    throw new Error(json?.error?.message ?? `Request failed: ${res.status}`);
+  const text = await res.text();
+  let json: {
+    success?: boolean;
+    error?: { message?: string };
+    data?: T;
+  } | null = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as {
+        success?: boolean;
+        error?: { message?: string };
+        data?: T;
+      };
+    } catch {
+      json = null;
+    }
+  }
+  if (!res.ok || !json?.success) {
+    throw new ApiError(
+      json?.error?.message ?? `Request failed: ${res.status}`,
+      res.status,
+    );
   }
   return json.data as T;
 }

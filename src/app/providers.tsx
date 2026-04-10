@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionBootstrapper } from "@/components/auth/session-bootstrapper";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SessionBootstrapper />
       {children}
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

@@ -1,12 +1,16 @@
 "use client";
 
 import { clearAuthToken, setAuthToken } from "@/lib/api-client";
+import { getHomeRouteByRole, mapBackendRole } from "@/lib/auth-role";
+import { useAuthStore } from "@/store/auth";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function GoogleCallbackPage() {
   const router = useRouter();
+  const setUser = useAuthStore((s) => s.setUser);
+  const setToken = useAuthStore((s) => s.setToken);
 
   useEffect(() => {
     const hash = window.location.hash.startsWith("#")
@@ -23,7 +27,7 @@ export default function GoogleCallbackPage() {
 
     const accessToken = params.get("accessToken");
     const refreshToken = params.get("refreshToken");
-    const role = (params.get("role") ?? "").toUpperCase();
+    const role = params.get("role") ?? "";
 
     if (!accessToken || !refreshToken) {
       clearAuthToken();
@@ -33,16 +37,18 @@ export default function GoogleCallbackPage() {
       return;
     }
 
-    if (role && role !== "ADMIN") {
-      clearAuthToken();
-      router.replace("/login?reason=admin_only");
-      return;
-    }
-
     setAuthToken(accessToken);
     localStorage.setItem("refresh_token", refreshToken);
-    router.replace("/dashboard");
-  }, [router]);
+    setToken(accessToken);
+    setUser({
+      id: params.get("userId") ?? "",
+      email: params.get("email") ?? "",
+      role,
+      status: params.get("status") ?? "",
+      name: params.get("name") ?? "",
+    });
+    router.replace(getHomeRouteByRole(mapBackendRole(role)));
+  }, [router, setToken, setUser]);
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6">

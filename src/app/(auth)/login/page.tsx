@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProfile, useLogin } from "@/hooks/auth";
-import { clearAuthToken, getAuthToken } from "@/lib/api-client";
+import { getAuthToken } from "@/lib/api-client";
+import { getHomeRouteByRole, mapBackendRole } from "@/lib/auth-role";
+import { useAuthStore } from "@/store/auth";
 import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -15,6 +17,8 @@ function LoginForm() {
   const params = useSearchParams();
   const hasToken = !!getAuthToken();
   const profile = useAuthProfile(hasToken);
+  const setUser = useAuthStore((s) => s.setUser);
+  const setToken = useAuthStore((s) => s.setToken);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,18 +28,15 @@ function LoginForm() {
 
   useEffect(() => {
     if (hasToken && profile.data) {
-      if (String(profile.data.role).toUpperCase() === "ADMIN") {
-        router.replace("/dashboard");
-        return;
-      }
-      clearAuthToken();
-      router.replace("/login?reason=admin_only");
+      setUser(profile.data);
+      const role = mapBackendRole(profile.data.role);
+      router.replace(getHomeRouteByRole(role));
     }
-  }, [hasToken, profile.data, router]);
+  }, [hasToken, profile.data, router, setUser]);
 
   const roleError =
-    params.get("reason") === "admin_only"
-      ? "Ce portail est réservé aux comptes super admin."
+    params.get("reason") === "role_blocked"
+      ? "Accès refusé pour ce rôle."
       : null;
   const oauthError = params.get("error");
   const oauthErrorMessage = oauthError ?? null;
@@ -54,12 +55,10 @@ function LoginForm() {
     setError(null);
     try {
       const result = await login.mutateAsync({ email, password });
-      if (String(result.user.role).toUpperCase() !== "ADMIN") {
-        clearAuthToken();
-        setError("Ce portail est réservé aux comptes super admin.");
-        return;
-      }
-      router.push("/dashboard");
+      setToken(result.tokens.accessToken);
+      setUser(result.user);
+      const role = mapBackendRole(result.user.role);
+      router.push(getHomeRouteByRole(role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Identifiants incorrects");
     }
