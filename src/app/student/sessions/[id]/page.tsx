@@ -5,10 +5,14 @@ import {
   StudentLoadingCard,
   StudentPageHeader,
 } from "../../_components/common";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStudentSessionDetail } from "@/hooks/student";
-import { computeDurationMinutes } from "@/lib/student-utils";
+import {
+  computeDurationMinutes,
+  getSessionModeLabel,
+} from "@/lib/student-utils";
 import { useParams } from "next/navigation";
 
 export default function StudentSessionDetailPage() {
@@ -33,7 +37,12 @@ export default function StudentSessionDetailPage() {
         {query.data ? (
           <Card className="rounded-2xl border-border/70 shadow-sm">
             <CardHeader>
-              <CardTitle>{query.data.title}</CardTitle>
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle>{query.data.title}</CardTitle>
+                <Badge variant="secondary">
+                  {getSessionModeLabel(query.data.mode)}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p>

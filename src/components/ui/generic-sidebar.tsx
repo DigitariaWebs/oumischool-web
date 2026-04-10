@@ -201,7 +201,7 @@ export function GenericSidebar({
                 className="py-0"
               >
                 <SidebarGroupContent>
-                  <SidebarMenu className="gap-0.5">
+                  <SidebarMenu className="gap-2">
                     {section.items.map((item) => {
                       const isActive = pathname === item.url;
                       return (
@@ -212,12 +212,12 @@ export function GenericSidebar({
                               disabled
                               tooltip={item.title}
                               className={cn(
-                                "w-full text-sm font-medium rounded-lg",
+                                "w-full text-base font-semibold rounded-lg h-11 px-4 py-2",
                                 "opacity-50 cursor-not-allowed",
                                 "text-muted-foreground",
                               )}
                             >
-                              <item.icon className="size-4 shrink-0" />
+                              <item.icon className="size-5 shrink-0" />
                             </SidebarMenuButton>
                           ) : (
                             <SidebarMenuButton
@@ -225,7 +225,7 @@ export function GenericSidebar({
                               isActive={isActive}
                               tooltip={item.title}
                               className={cn(
-                                "w-full text-sm font-medium transition-all duration-200 rounded-lg",
+                                "w-full text-base font-semibold transition-all duration-200 rounded-xl h-11 px-4 py-2",
                                 "hover:bg-sidebar-accent",
                                 isActive && [
                                   "bg-primary text-primary-foreground",
@@ -241,7 +241,7 @@ export function GenericSidebar({
                                 <div className="relative">
                                   <item.icon
                                     className={cn(
-                                      "size-4 shrink-0 transition-colors",
+                                      "size-5 shrink-0 transition-colors",
                                       isActive && "text-muted-foreground",
                                     )}
                                   />
@@ -289,7 +289,7 @@ export function GenericSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down border-l-2 border-sidebar-border ml-3 pl-3">
                     <SidebarGroupContent>
-                      <SidebarMenu className="gap-0.5">
+                      <SidebarMenu className="gap-2">
                         {section.items.map((item) => {
                           const isActive = pathname === item.url;
                           return (
@@ -300,13 +300,12 @@ export function GenericSidebar({
                                   disabled
                                   tooltip={item.title}
                                   className={cn(
-                                    "w-full text-sm font-medium",
-                                    isExpanded ? "rounded-xl" : "rounded-lg",
+                                    "w-full text-base font-semibold",
                                     "opacity-50 cursor-not-allowed",
                                     "text-muted-foreground",
                                   )}
                                 >
-                                  <item.icon className="size-4 shrink-0" />
+                                  <item.icon className="size-5 shrink-0" />
                                   {isExpanded && (
                                     <span className="truncate">
                                       {item.title}
@@ -319,7 +318,7 @@ export function GenericSidebar({
                                   isActive={isActive}
                                   tooltip={item.title}
                                   className={cn(
-                                    "w-full text-sm font-medium transition-all duration-200",
+                                    "w-full text-base font-semibold transition-all duration-200",
                                     isExpanded ? "rounded-xl" : "rounded-lg",
                                     "hover:bg-sidebar-accent",
                                     isActive && [
@@ -338,7 +337,7 @@ export function GenericSidebar({
                                   >
                                     <item.icon
                                       className={cn(
-                                        "size-4 shrink-0 transition-colors",
+                                        "size-5 shrink-0 transition-colors",
                                         isActive && "text-muted-foreground",
                                       )}
                                     />
@@ -372,7 +371,7 @@ export function GenericSidebar({
                 </Collapsible>
               ) : (
                 <SidebarGroupContent>
-                  <SidebarMenu className="gap-0.5">
+                  <SidebarMenu className="gap-2">
                     {section.items.map((item) => {
                       const isActive = pathname === item.url;
                       return (
@@ -383,12 +382,12 @@ export function GenericSidebar({
                               disabled
                               tooltip={item.title}
                               className={cn(
-                                "w-full text-sm font-medium rounded-xl",
+                                "w-full text-base font-semibold rounded-xl h-11 px-4 py-2",
                                 "opacity-50 cursor-not-allowed",
                                 "text-muted-foreground",
                               )}
                             >
-                              <item.icon className="size-4 shrink-0" />
+                              <item.icon className="size-5 shrink-0" />
                               <span className="truncate">{item.title}</span>
                             </SidebarMenuButton>
                           ) : (
@@ -397,7 +396,7 @@ export function GenericSidebar({
                               isActive={isActive}
                               tooltip={item.title}
                               className={cn(
-                                "w-full text-sm font-medium transition-all duration-200 rounded-xl",
+                                "w-full text-base font-semibold transition-all duration-200 rounded-xl h-11 px-4 py-2",
                                 "hover:bg-sidebar-accent",
                                 isActive && [
                                   "bg-primary text-primary-foreground",
@@ -412,7 +411,7 @@ export function GenericSidebar({
                               >
                                 <item.icon
                                   className={cn(
-                                    "size-4 shrink-0 transition-colors",
+                                    "size-5 shrink-0 transition-colors",
                                     isActive && "text-muted-foreground",
                                   )}
                                 />
@@ -443,7 +442,7 @@ export function GenericSidebar({
               {/* Show active item when section is collapsed - only for labeled sections */}
               {!isOpen && activeItem && section.label && (
                 <div className="mb-1">
-                  <SidebarMenu className="gap-0.5">
+                  <SidebarMenu className="gap-2">
                     <SidebarMenuItem>
                       {activeItem.disabled ? (
                         <SidebarMenuButton
@@ -456,7 +455,7 @@ export function GenericSidebar({
                             "text-muted-foreground",
                           )}
                         >
-                          <activeItem.icon className="size-4 shrink-0" />
+                          <activeItem.icon className="size-5 shrink-0" />
                           <span className="truncate">{activeItem.title}</span>
                         </SidebarMenuButton>
                       ) : (
@@ -477,7 +476,7 @@ export function GenericSidebar({
                           >
                             <activeItem.icon
                               className={cn(
-                                "size-4 shrink-0 transition-colors",
+                                "size-5 shrink-0 transition-colors",
                                 "text-muted-foreground",
                               )}
                             />

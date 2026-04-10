@@ -2,6 +2,7 @@
 
 import { studentApi } from "./api";
 import { studentKeys } from "./keys";
+import { useStudentChildId } from "@/hooks/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useStudentSessions() {
@@ -71,38 +72,48 @@ export function useStudentRecordResourceView() {
   });
 }
 
-export function useStudentPerformance(childId: string) {
+export function useStudentPerformance() {
+  const childId = useStudentChildId();
+
   return useQuery({
-    queryKey: studentKeys.performance(childId),
-    queryFn: () => studentApi.performance(childId),
+    queryKey: studentKeys.performance(childId ?? ""),
+    queryFn: () => studentApi.performance(childId ?? ""),
     enabled: !!childId,
   });
 }
 
-export function useStudentActivities(childId: string, limit = 10) {
+export function useStudentActivities(limit = 10) {
+  const childId = useStudentChildId();
+
   return useQuery({
-    queryKey: studentKeys.activities(childId, limit),
-    queryFn: () => studentApi.activities(childId, limit),
+    queryKey: studentKeys.activities(childId ?? "", limit),
+    queryFn: () => studentApi.activities(childId ?? "", limit),
     enabled: !!childId,
   });
 }
 
-export function useStudentRecommendations(childId: string) {
+export function useStudentRecommendations() {
+  const childId = useStudentChildId();
+
   return useQuery({
-    queryKey: studentKeys.recommendations(childId),
-    queryFn: () => studentApi.recommendations(childId),
+    queryKey: studentKeys.recommendations(childId ?? ""),
+    queryFn: () => studentApi.recommendations(childId ?? ""),
     enabled: !!childId,
   });
 }
 
-export function useStudentCreateActivity(childId: string) {
+export function useStudentCreateActivity() {
+  const childId = useStudentChildId();
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
-      studentApi.createActivity(childId, body),
+      studentApi.createActivity(childId ?? "", body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: studentKeys.activities(childId, 10) });
-      qc.invalidateQueries({ queryKey: studentKeys.performance(childId) });
+      if (childId) {
+        qc.invalidateQueries({ queryKey: studentKeys.activities(childId, 10) });
+        qc.invalidateQueries({ queryKey: studentKeys.performance(childId) });
+      }
     },
   });
 }

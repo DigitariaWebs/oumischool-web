@@ -24,6 +24,10 @@ export interface AuthProfile {
   email: string;
   role: string;
   status: string;
+  child?: {
+    id: string;
+    name?: string;
+  } | null;
 }
 
 export const authApi = {

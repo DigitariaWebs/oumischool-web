@@ -62,6 +62,9 @@ export interface StudentActivity {
   subject?: string;
   createdAt: string;
   score?: number;
+  title?: string;
+  description?: string;
+  status?: string;
 }
 
 export interface StudentRecommendation {
@@ -176,7 +179,10 @@ export const studentApi = {
     return asArray<Record<string, unknown>>(res).map(pickResource);
   },
   resourceDownload: (id: string) =>
-    api.post<{ url?: string }>(`/resources/${id}/download`, {}),
+    api.post<{ url?: string; fileUrl?: string } & StudentResource>(
+      `/resources/${id}/download`,
+      {},
+    ),
   resourceRecordView: (id: string) =>
     api.post<{ ok: boolean }>(`/resources/${id}/record-view`, {}),
   performance: (childId: string) =>

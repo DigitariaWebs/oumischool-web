@@ -27,11 +27,6 @@ const menuSections = [
       { title: "Progrès", url: "/student/progress", icon: Trophy },
       { title: "Profil", url: "/student/profile", icon: UserCircle2 },
       { title: "Paramètres", url: "/student/settings", icon: Settings },
-      {
-        title: "Leçons intégrées",
-        url: "/student/lessons/math-fractions",
-        icon: BookMarked,
-      },
     ],
   },
 ];

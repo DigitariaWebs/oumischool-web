@@ -1,24 +1,40 @@
 "use client";
 
+import { ResourceViewer } from "../../_components/ResourceViewer";
 import {
   StudentErrorCard,
   StudentLoadingCard,
   StudentPageHeader,
 } from "../../_components/common";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   useMarkStudentCalendarEventDone,
   useStudentCalendarEventDetail,
 } from "@/hooks/student";
-import { computeDurationMinutes } from "@/lib/student-utils";
+import { StudentResource } from "@/hooks/student/api";
+import {
+  computeDurationMinutes,
+  getScheduleSourceLabel,
+} from "@/lib/student-utils";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 
 export default function StudentCalendarEventDetailPage() {
   const params = useParams<{ id: string }>();
   const id = String(params.id ?? "");
   const query = useStudentCalendarEventDetail(id);
   const markDone = useMarkStudentCalendarEventDone(id);
+  const [selectedResource, setSelectedResource] =
+    useState<StudentResource | null>(null);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -38,7 +54,12 @@ export default function StudentCalendarEventDetailPage() {
         {query.data ? (
           <Card className="rounded-2xl border-border/70 shadow-sm">
             <CardHeader>
-              <CardTitle>{query.data.title}</CardTitle>
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle>{query.data.title}</CardTitle>
+                <Badge variant="secondary">
+                  {getScheduleSourceLabel("self_directed")}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p>
@@ -73,15 +94,14 @@ export default function StudentCalendarEventDetailPage() {
                 <p className="mb-2 font-medium">Ressources associées</p>
                 <div className="space-y-2">
                   {(query.data.resources ?? []).map((resource) => (
-                    <a
+                    <Button
                       key={resource.id}
-                      href={resource.fileUrl ?? "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block rounded border border-border p-2 hover:bg-muted"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setSelectedResource(resource)}
                     >
                       {resource.title}
-                    </a>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -99,6 +119,24 @@ export default function StudentCalendarEventDetailPage() {
           </Card>
         ) : null}
       </div>
+
+      <Dialog
+        open={!!selectedResource}
+        onOpenChange={(open) =>
+          setSelectedResource(open ? selectedResource : null)
+        }
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedResource?.title}</DialogTitle>
+            <DialogDescription>Aperçu de la ressource</DialogDescription>
+          </DialogHeader>
+          {selectedResource && <ResourceViewer resource={selectedResource} />}
+          <Button variant="outline" onClick={() => setSelectedResource(null)}>
+            Fermer
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

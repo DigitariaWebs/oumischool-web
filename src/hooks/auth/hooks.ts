@@ -38,6 +38,18 @@ export function useForgotPassword() {
   });
 }
 
+export function useStudentProfile() {
+  return useQuery({
+    queryKey: authKeys.profile(),
+    queryFn: () => authApi.me(),
+  });
+}
+
+export function useStudentChildId() {
+  const profile = useStudentProfile();
+  return profile.data?.child?.id ?? null;
+}
+
 export function useVerifyEmail() {
   return useMutation({
     mutationFn: (token: string) => authApi.verifyEmail(token),

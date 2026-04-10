@@ -1,6 +1,10 @@
 "use client";
 
 import { StudentPageHeader } from "../_components/common";
+import {
+  OnlineLearningIllustration,
+  ProblemSolvingIllustration,
+} from "../_components/illustrations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,11 +23,10 @@ export default function StudentProfilePage() {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const clear = useAuthStore((s) => s.clear);
-  const childId = user?.id ?? "";
 
   const lessonsQuery = useStudentAssignedLessons();
-  const activitiesQuery = useStudentActivities(childId, 10);
-  const performanceQuery = useStudentPerformance(childId);
+  const activitiesQuery = useStudentActivities(10);
+  const performanceQuery = useStudentPerformance();
 
   const badges = computeBadges({
     attendanceRate: performanceQuery.data?.attendanceRate ?? 0,
@@ -36,6 +39,22 @@ export default function StudentProfilePage() {
   return (
     <div className="flex min-h-full flex-col">
       <StudentPageHeader title="Profil" subtitle="Tes infos et statistiques" />
+
+      {/* Header with Illustration */}
+      <div className="border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-3 py-6 md:px-6 md:py-8">
+        <div className="grid items-center gap-6 lg:grid-cols-2">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Ton profil</h2>
+            <p className="mt-3 text-base text-gray-700">
+              Gère tes infos et vois tes statistiques
+            </p>
+          </div>
+          <div className="flex justify-center lg:justify-end">
+            <OnlineLearningIllustration />
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 p-3 md:grid-cols-2 md:p-6">
         <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader>

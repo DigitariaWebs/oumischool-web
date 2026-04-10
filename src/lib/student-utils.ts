@@ -125,6 +125,39 @@ export function computeBadges(input: {
   };
 }
 
+export function getScheduleSourceLabel(
+  source: StudentScheduleItem["source"],
+): string {
+  return source === "self_directed"
+    ? "Session autonome"
+    : "Planifiée par parent";
+}
+
+export function getResourceTypeLabel(type: string): string {
+  const normalized = type.trim().toLowerCase();
+
+  if (normalized === "document") return "Document";
+  if (normalized === "video") return "Vidéo";
+  if (normalized === "audio") return "Audio";
+  if (normalized === "image") return "Image";
+  if (normalized === "interactive") return "Interactif";
+  if (normalized === "game") return "Jeu";
+
+  return normalized.length > 0 ? normalized : "Ressource";
+}
+
+export function getSessionModeLabel(mode?: string | null): string {
+  const normalized = String(mode ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "self_directed") return "Session autonome";
+  if (normalized === "group") return "Groupe";
+  if (normalized === "one_to_one") return "Individuel";
+
+  return normalized.length > 0 ? normalized : "Session encadrée";
+}
+
 export function getSubjectColor(
   subjectColor: string | null | undefined,
 ): string {

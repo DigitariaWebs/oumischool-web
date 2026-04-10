@@ -7,7 +7,7 @@ import { useAuthProfile, useLogin } from "@/hooks/auth";
 import { getAuthToken } from "@/lib/api-client";
 import { getHomeRouteByRole, mapBackendRole } from "@/lib/auth-role";
 import { useAuthStore } from "@/store/auth";
-import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Loader2, Users } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -166,29 +166,32 @@ function LoginForm() {
         {/* Bottom cards */}
         <div className="relative z-10 grid grid-cols-2 gap-3">
           {[
-            { icon: "📚", label: "Ressources gérées", count: "3,200+" },
-            { icon: "👨‍👩‍👧", label: "Familles actives", count: "870+" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl p-4"
-              style={{
-                background: "oklch(0.24 0.025 250)",
-                border: "1px solid oklch(0.3 0.025 250)",
-              }}
-            >
-              <div className="text-2xl mb-2">{item.icon}</div>
-              <div className="text-white font-semibold text-sm">
-                {item.count}
-              </div>
+            { icon: BookOpen, label: "Ressources gérées", count: "3,200+" },
+            { icon: Users, label: "Familles actives", count: "870+" },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
               <div
-                className="text-xs mt-0.5"
-                style={{ color: "oklch(0.55 0.02 250)" }}
+                key={item.label}
+                className="rounded-2xl p-4"
+                style={{
+                  background: "oklch(0.24 0.025 250)",
+                  border: "1px solid oklch(0.3 0.025 250)",
+                }}
               >
-                {item.label}
+                <Icon className="w-6 h-6 text-white mb-2" />
+                <div className="text-white font-semibold text-sm">
+                  {item.count}
+                </div>
+                <div
+                  className="text-xs mt-0.5"
+                  style={{ color: "oklch(0.55 0.02 250)" }}
+                >
+                  {item.label}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

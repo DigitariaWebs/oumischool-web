@@ -65,13 +65,24 @@ async function request<T>(
       json = null;
     }
   }
-  if (!res.ok || !json?.success) {
+  const hasSuccessEnvelope =
+    !!json && typeof json === "object" && "success" in json;
+
+  if (!res.ok || (hasSuccessEnvelope && !json?.success)) {
     throw new ApiError(
       json?.error?.message ?? `Request failed: ${res.status}`,
       res.status,
     );
   }
-  return json.data as T;
+
+  if (json && typeof json === "object") {
+    if ("data" in json && json.data !== undefined) {
+      return json.data as T;
+    }
+    return json as T;
+  }
+
+  return undefined as T;
 }
 
 export const api = {

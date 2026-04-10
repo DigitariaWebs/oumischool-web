@@ -1,16 +1,20 @@
 "use client";
 
+import { ResourceViewer } from "../_components/ResourceViewer";
 import {
   StudentEmptyCard,
   StudentErrorCard,
   StudentLoadingCard,
   StudentPageHeader,
 } from "../_components/common";
+import { EmptyLessonsIllustration } from "../_components/illustrations";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -23,16 +27,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useStudentDownloadResource,
   useStudentRecordResourceView,
   useStudentResources,
 } from "@/hooks/student";
+import { getResourceTypeLabel } from "@/lib/student-utils";
 import { useMemo, useState } from "react";
 
 export default function StudentResourcesPage() {
   const resourcesQuery = useStudentResources();
   const recordView = useStudentRecordResourceView();
-  const downloadResource = useStudentDownloadResource();
 
   const [grade, setGrade] = useState("all");
   const [subject, setSubject] = useState("all");
@@ -83,51 +86,35 @@ export default function StudentResourcesPage() {
     await recordView.mutateAsync(resourceId).catch(() => undefined);
   };
 
-  const openInViewer = async () => {
-    if (!selected) return;
-    if (selected.type === "interactive" && selected.fileUrl) {
-      window.open(selected.fileUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    if (selected.type === "document") {
-      window.open(
-        `/dashboard/resources/${selected.id}`,
-        "_blank",
-        "noopener,noreferrer",
-      );
-      return;
-    }
-
-    if (
-      (selected.type === "video" ||
-        selected.type === "audio" ||
-        selected.type === "image") &&
-      selected.fileUrl
-    ) {
-      window.open(selected.fileUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    const result = await downloadResource
-      .mutateAsync(selected.id)
-      .catch(() => null);
-    if (result?.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    if (selected.fileUrl) {
-      window.open(selected.fileUrl, "_blank", "noopener,noreferrer");
-    }
-  };
-
   return (
     <div className="flex min-h-full flex-col">
       <StudentPageHeader
         title="Bibliothèque"
         subtitle="Tes ressources disponibles"
       />
+
+      {/* Header with Illustration */}
+      <div className="border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-3 py-6 md:px-6 md:py-8">
+        <div className="grid items-center gap-6 lg:grid-cols-2">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              Accède à tes ressources
+            </h2>
+            <p className="mt-3 text-base text-gray-700">
+              Consulte tous tes documents, vidéos et fichiers en un seul
+              endroit.
+            </p>
+          </div>
+          <div className="flex justify-center lg:justify-end">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Notebook-amico.svg"
+              alt="Ressources"
+              className="h-48 w-48 object-contain"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="space-y-4 p-3 md:p-6">
         <Card className="rounded-2xl border-border/70 shadow-sm">
@@ -203,10 +190,20 @@ export default function StudentResourcesPage() {
         {!resourcesQuery.isLoading &&
         !resourcesQuery.isError &&
         filtered.length === 0 ? (
-          <StudentEmptyCard
-            title="Aucune ressource"
-            description="Aucune ressource ne correspond à tes filtres."
-          />
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Mental health-cuate.svg"
+              alt="Aucune ressource"
+              className="mb-6 h-48 w-48 object-contain"
+            />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Aucune ressource trouvée
+            </h3>
+            <p className="mt-2 max-w-xs text-sm text-gray-600">
+              Essaie de modifier tes filtres ou reviens plus tard
+            </p>
+          </div>
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -216,15 +213,22 @@ export default function StudentResourcesPage() {
               className="rounded-2xl border-border/70 shadow-sm"
             >
               <CardHeader>
-                <CardTitle className="text-base">{resource.title}</CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-base">{resource.title}</CardTitle>
+                  <Badge variant="secondary" className="shrink-0">
+                    {getResourceTypeLabel(resource.type)}
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="line-clamp-2 text-sm text-muted-foreground">
                   {resource.description ?? "Sans description"}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {resource.subject ?? "Matière"} • {resource.type}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>{resource.subject ?? "Matière"}</span>
+                  <span>•</span>
+                  <span>{resource.grade ?? "Tous niveaux"}</span>
+                </div>
                 <Button
                   className="h-10"
                   onClick={() => void openResource(resource.id)}
@@ -242,24 +246,27 @@ export default function StudentResourcesPage() {
         open={!!selected}
         onOpenChange={(open) => setOpenId(open ? openId : null)}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selected?.title}</DialogTitle>
+            <DialogDescription>
+              {selected?.description ?? "Ressource pédagogique"}
+            </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {selected ? getResourceTypeLabel(selected.type) : "Ressource"}
+            </Badge>
+            <Badge variant="outline">{selected?.subject ?? "Matière"}</Badge>
+            <Badge variant="outline">{selected?.grade ?? "Tous niveaux"}</Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
             {selected?.description ?? "Aucune description."}
           </p>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => void openInViewer()}
-              aria-label="Ouvrir la ressource dans le lecteur"
-            >
-              Ouvrir dans le lecteur
-            </Button>
-            <Button variant="outline" onClick={() => setOpenId(null)}>
-              Fermer
-            </Button>
-          </div>
+          {selected && <ResourceViewer resource={selected} />}
+          <Button variant="outline" onClick={() => setOpenId(null)}>
+            Fermer
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

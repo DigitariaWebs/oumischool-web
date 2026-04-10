@@ -5,6 +5,10 @@ import {
   StudentLoadingCard,
   StudentPageHeader,
 } from "../_components/common";
+import {
+  ProblemSolvingIllustration,
+  OnlineLearningIllustration,
+} from "../_components/illustrations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +37,28 @@ export default function StudentExercisesPage() {
         title="Exercices"
         subtitle="Mini-jeux et leçons interactives"
       />
+
+      {/* Header with Illustration */}
+      <div className="border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-3 py-6 md:px-6 md:py-8">
+        <div className="grid items-center gap-6 lg:grid-cols-2">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              Apprends en jouant
+            </h2>
+            <p className="mt-3 text-base text-gray-700">
+              Mini-jeux amusants pour progresser dans tes matières
+            </p>
+          </div>
+          <div className="flex justify-center lg:justify-end">
+            <img
+              src="/Mental health-cuate.svg"
+              alt="Exercices"
+              className="h-48 w-48 object-contain"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="p-4 md:p-6">
         <Tabs defaultValue="mini-games" className="space-y-4">
           <TabsList>
