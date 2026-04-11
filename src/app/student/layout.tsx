@@ -7,13 +7,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthStore } from "@/store/auth";
 import {
-  BookMarked,
   BookOpen,
   Gamepad2,
   LayoutDashboard,
   Settings,
   Trophy,
-  UserCircle2,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -21,11 +19,10 @@ import { useRouter } from "next/navigation";
 const menuSections = [
   {
     items: [
-      { title: "Leçons", url: "/student", icon: LayoutDashboard },
+      { title: "Accueil", url: "/student", icon: LayoutDashboard },
       { title: "Jeux", url: "/student/exercises", icon: Gamepad2 },
-      { title: "Biblio", url: "/student/resources", icon: BookOpen },
+      { title: "Bibliothèque", url: "/student/resources", icon: BookOpen },
       { title: "Progrès", url: "/student/progress", icon: Trophy },
-      { title: "Profil", url: "/student/profile", icon: UserCircle2 },
       { title: "Paramètres", url: "/student/settings", icon: Settings },
     ],
   },

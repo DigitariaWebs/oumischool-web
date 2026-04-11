@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStudentActivities, useStudentPerformance } from "@/hooks/student";
-import { computeBadges } from "@/lib/student-utils";
+import { computeBadges, getStatusLabel } from "@/lib/student-utils";
 
 export default function StudentProgressPage() {
   const performanceQuery = useStudentPerformance();
@@ -207,7 +207,7 @@ export default function StudentProgressPage() {
                           )}
                           {activity.status && (
                             <span className="text-xs text-muted-foreground">
-                              ({activity.status})
+                              ({getStatusLabel(activity.status)})
                             </span>
                           )}
                         </div>

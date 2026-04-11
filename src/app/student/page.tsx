@@ -1,16 +1,10 @@
 "use client";
 
 import {
-  StudentEmptyCard,
   StudentErrorCard,
   StudentLoadingCard,
   StudentPageHeader,
 } from "./_components/common";
-import {
-  EmptyScheduleIllustration,
-  EmptyLessonsIllustration,
-  OnlineLearningIllustration,
-} from "./_components/illustrations";
 import { resolveDashboardUiState } from "./dashboard-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   useStudentAssignedLessons,
   useStudentCalendarEvents,
-  useStudentRecommendations,
   useStudentSessions,
 } from "@/hooks/student";
 import {
@@ -26,34 +19,24 @@ import {
   filterScheduleItemsByView,
   getNextLesson,
   getScheduleSourceLabel,
+  getStatusBadgeClasses,
+  getStatusLabel,
   getSubjectColor,
   mergeScheduleItems,
   StudentScheduleItem,
 } from "@/lib/student-utils";
 import { useAuthStore } from "@/store/auth";
 import {
+  ArrowRight,
+  BookOpen,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  Flame,
-  GraduationCap,
-  HeartPulse,
   ListChecks,
-  NotebookPen,
   Sparkles,
-  Trophy,
-  Activity,
-  BookOpen,
-  TrendingUp,
-  Settings,
-  HelpCircle,
-  Zap,
-  MapPin,
-  CheckCircle2,
-  Rocket,
   Target,
-  Award,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -94,11 +77,9 @@ function toScheduleItems(
 
 export default function StudentDashboardPage() {
   const user = useAuthStore((s) => s.user);
-  const childId = user?.id ?? "";
   const sessionsQuery = useStudentSessions();
   const eventsQuery = useStudentCalendarEvents();
   const lessonsQuery = useStudentAssignedLessons();
-  const recommendationsQuery = useStudentRecommendations(childId);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mode, setMode] = useState<"day" | "week">("week");
@@ -115,6 +96,12 @@ export default function StudentDashboardPage() {
 
   const nextLesson = useMemo(
     () => getNextLesson(mergedSchedule),
+    [mergedSchedule],
+  );
+
+  const selfDirectedCount = useMemo(
+    () =>
+      mergedSchedule.filter((item) => item.source === "self_directed").length,
     [mergedSchedule],
   );
 
@@ -145,596 +132,432 @@ export default function StudentDashboardPage() {
     schedule: mergedSchedule,
   });
 
+  const firstName = user?.firstName ?? user?.name?.split(" ")[0] ?? "champion";
+
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col bg-background">
       <StudentPageHeader
-        title={`Salut ${user?.name ?? user?.firstName ?? "champion"}`}
-        subtitle="Bienvenue dans ton espace d'apprentissage OumiSchool"
+        title={`Salut ${firstName}`}
+        subtitle="Bienvenue dans ton espace d'apprentissage"
       />
 
-      {/* Welcome Section with Illustration */}
-      <div className="border-b border-border/50 bg-gradient-to-r from-primary/5 to-transparent px-3 py-6 md:px-6 md:py-8">
-        <div className="grid items-center gap-6 lg:grid-cols-2">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-              Bienvenue sur OumiSchool
-            </h2>
-            <p className="mt-3 text-base text-gray-700">
-              Acc&egrave;de à tes cours, leçons et ressources. Travaille à ton
-              rythme avec l&apos;aide de tes tuteurs.
-            </p>
-            <div className="mt-4 flex gap-3">
-              <Button asChild>
-                <Link href="/student/resources">Voir mes ressources</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/student/progress">Mes progrès</Link>
-              </Button>
+      <div className="space-y-6 p-4 md:p-8">
+        {/* Hero card */}
+        <Card className="overflow-hidden rounded-2xl border-border/70 bg-gradient-to-br from-primary/5 via-background to-background shadow-sm">
+          <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+            <div className="max-w-xl space-y-3">
+              <Badge
+                variant="secondary"
+                className="rounded-full px-3 py-1 text-[11px] font-medium"
+              >
+                Espace élève
+              </Badge>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                Prêt pour ta prochaine leçon ?
+              </h2>
+              <p className="text-sm text-muted-foreground md:text-base">
+                Retrouve tes sessions, tes devoirs assignés par tes parents et
+                tes ressources, tout au même endroit.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button asChild size="sm" className="h-9 rounded-lg">
+                  <Link href="/student/resources">Voir mes ressources</Link>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-lg"
+                >
+                  <Link href="/student/progress">Mes progrès</Link>
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="flex justify-center lg:justify-end">
-            <img
-              src="/Online learning-bro.svg"
-              alt="Apprentissage en ligne"
-              className="h-56 w-56 object-contain"
-            />
-          </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats row */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            icon={CalendarDays}
+            label="Sessions à venir"
+            value={upcomingCount}
+            hint={mode === "week" ? "cette semaine" : "aujourd'hui"}
+          />
+          <StatCard
+            icon={BookOpen}
+            label="Leçons assignées"
+            value={lessonsQuery.data?.length ?? 0}
+            hint="à travailler"
+          />
+          <StatCard
+            icon={Target}
+            label="Devoirs autonomes"
+            value={selfDirectedCount}
+            hint="en attente"
+          />
         </div>
-      </div>
 
-      {/* Dashboard Content */}
-      <div className="space-y-6 p-4 md:p-8 lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)] lg:items-start lg:gap-6 lg:space-y-0">
-        <div className="space-y-8">
-          {/* Stats Cards - 2 colors only */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-              <CardContent className="py-6 px-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Sessions à venir
-                    </p>
-                    <p className="mt-3 text-4xl font-bold text-primary">
-                      {upcomingCount}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-blue-200 dark:bg-blue-800">
-                    <CalendarDays className="h-8 w-8 text-blue-600 dark:text-blue-300" />
-                  </div>
+        {/* Next lesson */}
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Prochain cours
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!nextLesson ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <CalendarDays className="h-5 w-5 text-muted-foreground" />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-              <CardContent className="py-6 px-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Leçons assignées
+                <p className="text-sm font-medium text-foreground">
+                  Aucun cours prévu
+                </p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Tu n&apos;as rien au programme pour le moment. Profites-en
+                  pour revoir tes leçons !
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border/70 bg-muted/30 p-4 md:p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold text-foreground">
+                        {nextLesson.title}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-border/70 text-[11px] font-medium text-muted-foreground"
+                      >
+                        {getScheduleSourceLabel(nextLesson.source)}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(nextLesson.startTime).toLocaleString("fr-FR", {
+                        weekday: "long",
+                        day: "2-digit",
+                        month: "long",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
-                    <p className="mt-3 text-4xl font-bold text-emerald-600">
-                      {lessonsQuery.data?.length ?? 0}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-emerald-200 dark:bg-emerald-800">
-                    <BookOpen className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-              <CardContent className="py-6 px-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Objectif semaine
-                    </p>
-                    <p className="mt-3 text-4xl font-bold text-blue-600">3</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      activités
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-blue-200 dark:bg-blue-800">
-                    <Target className="h-8 w-8 text-blue-600 dark:text-blue-300" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-            <CardHeader className="pb-4 bg-gradient-to-r from-emerald-50 to-emerald-50 dark:from-emerald-950 dark:to-emerald-950">
-              <CardTitle className="text-xl font-bold text-gray-800 dark:text-white">
-                Prochain cours
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {!nextLesson ? (
-                <EmptyScheduleIllustration />
-              ) : (
-                <div className="rounded-3xl border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 p-6">
-                  <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3 mb-3">
-                        <p className="text-xl font-bold text-gray-800 dark:text-white">
-                          {nextLesson.title}
-                        </p>
-                        <Badge className="rounded-full bg-emerald-500 text-white font-semibold">
-                          {getScheduleSourceLabel(nextLesson.source)}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-base text-gray-700 dark:text-gray-300 font-medium">
-                        {new Date(nextLesson.startTime).toLocaleString("fr-FR")}{" "}
-                        •{" "}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground ring-1 ring-border/70">
+                        <Clock3 className="h-3.5 w-3.5" />
                         {computeDurationMinutes(
                           nextLesson.startTime,
                           nextLesson.endTime,
                         )}{" "}
                         min
-                      </p>
-                      <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700">
-                        <Clock3 className="h-5 w-5 text-emerald-600" />
-                        {nextLesson.source === "self_directed"
-                          ? "À faire en autonomie"
-                          : "Session encadrée"}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3 pt-4 md:pt-0">
-                      {nextLesson.meetingLink ? (
-                        <Button
-                          asChild
-                          className="h-12 px-6 text-base font-semibold rounded-xl"
-                        >
-                          <a
-                            href={nextLesson.meetingLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label="Rejoindre le cours en ligne"
-                          >
-                            Rejoindre
-                          </a>
-                        </Button>
-                      ) : null}
-                      {nextLesson.source === "self_directed" ? (
-                        <Button
-                          variant="outline"
-                          asChild
-                          className="h-12 px-6 text-base font-semibold rounded-xl"
-                        >
-                          <Link
-                            href={`/student/calendar-event/${nextLesson.id}`}
-                          >
-                            Détails
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          asChild
-                          className="h-12 px-6 text-base font-semibold rounded-xl"
-                        >
-                          <Link href={`/student/sessions/${nextLesson.id}`}>
-                            Voir la session
-                          </Link>
-                        </Button>
-                      )}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${getStatusBadgeClasses(
+                          nextLesson.status,
+                        )}`}
+                      >
+                        {getStatusLabel(nextLesson.status)}
+                      </span>
                     </div>
                   </div>
+                  <div className="flex flex-wrap gap-2 md:shrink-0">
+                    {nextLesson.meetingLink ? (
+                      <Button asChild size="sm" className="h-9 rounded-lg">
+                        <a
+                          href={nextLesson.meetingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Rejoindre
+                        </a>
+                      </Button>
+                    ) : null}
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="h-9 rounded-lg"
+                    >
+                      <Link
+                        href={
+                          nextLesson.source === "self_directed"
+                            ? `/student/calendar-event/${nextLesson.id}`
+                            : `/student/sessions/${nextLesson.id}`
+                        }
+                      >
+                        Détails
+                        <ArrowRight className="ml-1 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-            <CardHeader className="gap-4 bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-950 dark:to-blue-950 pb-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <CardTitle className="text-xl font-bold text-gray-800 dark:text-white">
-                  Emploi du temps
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant={mode === "day" ? "default" : "outline"}
-                    size="sm"
-                    className="h-10 min-w-16 rounded-lg font-semibold"
-                    onClick={() => setMode("day")}
-                    aria-label="Afficher en mode jour"
-                  >
-                    Jour
-                  </Button>
-                  <Button
-                    variant={mode === "week" ? "default" : "outline"}
-                    size="sm"
-                    className="h-10 min-w-16 rounded-lg font-semibold"
-                    onClick={() => setMode("week")}
-                    aria-label="Afficher en mode semaine"
-                  >
-                    Semaine
-                  </Button>
-                </div>
+        {/* Schedule */}
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="gap-3 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base font-semibold">
+                Emploi du temps
+              </CardTitle>
+              <div className="inline-flex rounded-lg border border-border/70 bg-background p-0.5">
+                <button
+                  onClick={() => setMode("day")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    mode === "day"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-label="Afficher en mode jour"
+                >
+                  Jour
+                </button>
+                <button
+                  onClick={() => setMode("week")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    mode === "week"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-label="Afficher en mode semaine"
+                >
+                  Semaine
+                </button>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 rounded-lg"
-                  onClick={() =>
-                    setSelectedDate((prev) => {
-                      const next = new Date(prev);
-                      next.setDate(prev.getDate() - (mode === "week" ? 7 : 1));
-                      return next;
-                    })
-                  }
-                  aria-label="Période précédente"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
-                <Badge
-                  variant="secondary"
-                  className="h-10 px-4 text-sm font-semibold"
-                >
-                  <CalendarDays className="mr-2 h-5 w-5" />
-                  {selectedDate.toLocaleDateString("fr-FR", {
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 rounded-lg"
-                  onClick={() =>
-                    setSelectedDate((prev) => {
-                      const next = new Date(prev);
-                      next.setDate(prev.getDate() + (mode === "week" ? 7 : 1));
-                      return next;
-                    })
-                  }
-                  aria-label="Période suivante"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {uiState === "loading" ? (
-                <StudentLoadingCard label="Chargement du planning..." />
-              ) : null}
-              {uiState === "error" ? (
-                <StudentErrorCard
-                  message="Impossible de charger le planning."
-                  onRetry={() => {
-                    void sessionsQuery.refetch();
-                    void eventsQuery.refetch();
-                  }}
-                />
-              ) : null}
-              {uiState === "empty" ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <OnlineLearningIllustration />
-                  <h3 className="mt-6 text-lg font-semibold text-gray-800">
-                    Aucune session prévue
-                  </h3>
-                  <p className="mt-2 max-w-xs text-sm text-gray-600">
-                    Ton planning est vide pour cette période
-                  </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg"
+                onClick={() =>
+                  setSelectedDate((prev) => {
+                    const next = new Date(prev);
+                    next.setDate(prev.getDate() - (mode === "week" ? 7 : 1));
+                    return next;
+                  })
+                }
+                aria-label="Période précédente"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-foreground">
+                {selectedDate.toLocaleDateString("fr-FR", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg"
+                onClick={() =>
+                  setSelectedDate((prev) => {
+                    const next = new Date(prev);
+                    next.setDate(prev.getDate() + (mode === "week" ? 7 : 1));
+                    return next;
+                  })
+                }
+                aria-label="Période suivante"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {uiState === "loading" ? (
+              <StudentLoadingCard label="Chargement du planning..." />
+            ) : null}
+            {uiState === "error" ? (
+              <StudentErrorCard
+                message="Impossible de charger le planning."
+                onRetry={() => {
+                  void sessionsQuery.refetch();
+                  void eventsQuery.refetch();
+                }}
+              />
+            ) : null}
+            {uiState === "empty" || visibleItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <CalendarDays className="h-5 w-5 text-muted-foreground" />
                 </div>
-              ) : null}
-              {uiState === "ready" ? (
-                <div className="space-y-4">
-                  {groupedVisibleItems.map(([dayLabel, items]) => (
-                    <section key={dayLabel} className="space-y-2">
-                      <h3 className="text-sm font-semibold capitalize text-muted-foreground">
-                        {dayLabel}
-                      </h3>
-                      <div className="space-y-2">
-                        {items.map((item) => (
-                          <Link
-                            key={`${item.source}-${item.id}`}
-                            href={
-                              item.source === "self_directed"
-                                ? `/student/calendar-event/${item.id}`
-                                : `/student/sessions/${item.id}`
-                            }
-                            className="block rounded-2xl border border-border p-3 transition hover:bg-muted/50"
-                          >
-                            <div className="flex gap-3">
-                              <div
-                                className="mt-0.5 h-12 w-1.5 rounded-full"
-                                style={{
-                                  backgroundColor: getSubjectColor(
-                                    item.subjectColor,
-                                  ),
-                                }}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <p className="truncate font-medium">
-                                    {item.title}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant="secondary">
-                                      {getScheduleSourceLabel(item.source)}
-                                    </Badge>
-                                    <Badge
-                                      style={{
-                                        backgroundColor: `${getSubjectColor(
-                                          item.subjectColor,
-                                        )}22`,
-                                        color: getSubjectColor(
-                                          item.subjectColor,
-                                        ),
-                                      }}
-                                    >
-                                      {item.subject}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                  {new Date(item.startTime).toLocaleTimeString(
-                                    "fr-FR",
-                                    { hour: "2-digit", minute: "2-digit" },
-                                  )}
-                                  {" - "}
-                                  {new Date(item.endTime).toLocaleTimeString(
-                                    "fr-FR",
-                                    { hour: "2-digit", minute: "2-digit" },
-                                  )}
-                                  {" • "}
-                                  {computeDurationMinutes(
-                                    item.startTime,
-                                    item.endTime,
-                                  )}{" "}
-                                  min
-                                </p>
+                <p className="text-sm font-medium text-foreground">
+                  Aucune session prévue
+                </p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Ton planning est vide pour cette période.
+                </p>
+              </div>
+            ) : null}
+            {uiState === "ready" && visibleItems.length > 0 ? (
+              <div className="space-y-5">
+                {groupedVisibleItems.map(([dayLabel, items]) => (
+                  <section key={dayLabel} className="space-y-2">
+                    <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {dayLabel}
+                    </h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <Link
+                          key={`${item.source}-${item.id}`}
+                          href={
+                            item.source === "self_directed"
+                              ? `/student/calendar-event/${item.id}`
+                              : `/student/sessions/${item.id}`
+                          }
+                          className="group flex items-start gap-3 rounded-xl border border-border/70 bg-background p-3 transition hover:border-primary/40 hover:bg-muted/40"
+                        >
+                          <div
+                            className="mt-1 h-10 w-1 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: getSubjectColor(
+                                item.subjectColor,
+                              ),
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {item.title}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className="rounded-full border-border/70 text-[10px] font-medium text-muted-foreground"
+                                >
+                                  {getScheduleSourceLabel(item.source)}
+                                </Badge>
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeClasses(
+                                    item.status,
+                                  )}`}
+                                >
+                                  {getStatusLabel(item.status)}
+                                </span>
                               </div>
                             </div>
-                          </Link>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {new Date(item.startTime).toLocaleTimeString(
+                                "fr-FR",
+                                { hour: "2-digit", minute: "2-digit" },
+                              )}
+                              {" – "}
+                              {new Date(item.endTime).toLocaleTimeString(
+                                "fr-FR",
+                                { hour: "2-digit", minute: "2-digit" },
+                              )}
+                              {" · "}
+                              {computeDurationMinutes(
+                                item.startTime,
+                                item.endTime,
+                              )}{" "}
+                              min · {item.subject}
+                            </p>
+                          </div>
+                          <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
-          <div className="grid gap-6 lg:grid-cols-1">
-            <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-emerald-50 to-emerald-50 dark:from-emerald-950 dark:to-emerald-950 pb-4">
-                <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-800 dark:text-white">
-                  <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                  Assistant IA
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Besoin d&apos;un coup de main ? L&apos;assistant IA te
-                  proposera bientôt un accompagnement personnalisé.
-                </p>
-                <Button
-                  variant="outline"
-                  disabled
-                  className="h-10 w-full md:w-auto"
-                  aria-label="Assistant IA bientôt disponible"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Bientôt disponible
-                </Button>
-                {recommendationsQuery.data &&
-                recommendationsQuery.data.length > 0 ? (
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    Recommandation: {recommendationsQuery.data[0].title}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        <aside className="space-y-6 lg:sticky lg:top-6">
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-950 dark:to-blue-950 pb-4">
-              <CardTitle className="text-xl font-bold text-gray-800 dark:text-white">
-                Résumé rapide
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4 md:p-6">
-              <div className="rounded-3xl border-0 bg-gradient-to-br from-blue-50 to-blue-50 dark:from-blue-950 dark:to-blue-950 p-6 shadow-md">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                  Période actuelle
-                </p>
-                <p className="mt-3 text-5xl font-black text-blue-600 dark:text-blue-400">
-                  {upcomingCount}
-                </p>
-                <p className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  activités visibles
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-2xl border-0 bg-gradient-to-br from-emerald-50 to-emerald-50 dark:from-emerald-950 dark:to-emerald-950 p-4 shadow-md transition-all hover:shadow-lg hover:scale-105">
-                  <BookOpen className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                  <p className="mt-3 text-3xl font-bold text-emerald-700 dark:text-emerald-300">
-                    {lessonsQuery.data?.length ?? 0}
-                  </p>
-                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    leçons
-                  </p>
-                </div>
-                <div className="rounded-2xl border-0 bg-gradient-to-br from-blue-50 to-blue-50 dark:from-blue-950 dark:to-blue-950 p-4 shadow-md transition-all hover:shadow-lg hover:scale-105">
-                  <HeartPulse className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  <p className="mt-3 text-3xl font-bold text-blue-700 dark:text-blue-300">
-                    94%
-                  </p>
-                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    présence cible
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-50 dark:from-blue-950 dark:to-blue-950 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-800 dark:text-white">
-                <Zap className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                Actions rapides
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 p-4 md:p-6">
-              <Button
-                asChild
-                className="h-12 w-full justify-start rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/resources">
-                  <ListChecks className="mr-3 h-5 w-5" />
-                  Ouvrir la bibliothèque
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="h-12 w-full justify-start rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/progress">
-                  <TrendingUp className="mr-3 h-5 w-5" />
-                  Voir les progrès
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="h-12 w-full justify-start rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/settings">
-                  <Settings className="mr-3 h-5 w-5" />
-                  Paramètres
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950 dark:to-blue-950 pb-4">
-              <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-800 dark:text-white">
-                <HelpCircle className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-                Besoin d&apos;aide ?
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4 md:p-6 text-sm">
-              <div className="rounded-xl bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 p-3">
-                <p className="text-xs font-semibold text-orange-900 dark:text-orange-100 flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Sessions encadrées
-                </p>
-                <p className="text-xs text-orange-800 dark:text-orange-200 mt-1">
-                  Proposées par l&apos;équipe pédagogique
-                </p>
-              </div>
-              <div className="rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 p-3">
-                <p className="text-xs font-semibold text-green-900 dark:text-green-100 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Sessions autonomes
-                </p>
-                <p className="text-xs text-green-800 dark:text-green-200 mt-1">
-                  Clairement signalées dans le planning
-                </p>
-              </div>
-              <div className="rounded-xl bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3">
-                <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                  <Rocket className="h-4 w-4" />
-                  Mon conseil
-                </p>
-                <p className="text-xs text-blue-800 dark:text-blue-200 mt-1">
-                  Complète tes leçons pour progresser !
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
+        {/* Quick links */}
+        <Card className="rounded-2xl border-border/70 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Explorer</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <QuickLink
+              href="/student/resources"
+              icon={ListChecks}
+              title="Bibliothèque"
+              description="Documents, vidéos et ressources"
+            />
+            <QuickLink
+              href="/student/progress"
+              icon={TrendingUp}
+              title="Mes progrès"
+              description="Performance et badges"
+            />
+            <QuickLink
+              href="/student/exercises"
+              icon={Sparkles}
+              title="Jeux éducatifs"
+              description="Apprends en t'amusant"
+            />
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Exploration Section with Illustrations */}
-      <section className="border-t border-border/50 px-3 py-10 md:px-6 md:py-16">
-        <h2 className="text-4xl font-black text-gray-800 dark:text-white">
-          Explorer plus
-        </h2>
-        <p className="mt-3 text-lg font-medium text-gray-600 dark:text-gray-400">
-          Découvre toutes les ressources disponibles
-        </p>
-
-        <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {/* Learning Section */}
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105">
-            <div className="flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 px-6 py-10">
-              <img
-                src="/Learning-bro.svg"
-                alt="Apprentissage"
-                className="h-48 w-48 object-contain"
-              />
-              <h3 className="mt-6 text-2xl font-bold text-gray-800 dark:text-white">
-                Mes Leçons
-              </h3>
-              <p className="mt-3 text-center text-base text-gray-700 dark:text-gray-300">
-                Tes leçons assignées par tes tuteurs
-              </p>
-              <Button
-                asChild
-                className="mt-6 h-12 w-full rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/lessons">Voir les leçons</Link>
-              </Button>
-            </div>
-          </Card>
-
-          {/* Resources Section */}
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105">
-            <div className="flex flex-col items-center justify-center bg-gradient-to-b from-orange-50 to-yellow-50 dark:from-orange-950 dark:to-yellow-950 px-6 py-10">
-              <img
-                src="/Notebook-amico.svg"
-                alt="Ressources"
-                className="h-48 w-48 object-contain"
-              />
-              <h3 className="mt-6 text-2xl font-bold text-gray-800 dark:text-white">
-                Ressources
-              </h3>
-              <p className="mt-3 text-center text-base text-gray-700 dark:text-gray-300">
-                PDF, vidéos et fichiers à ton service
-              </p>
-              <Button
-                asChild
-                className="mt-6 h-12 w-full rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/resources">Accéder à la bibliothèque</Link>
-              </Button>
-            </div>
-          </Card>
-
-          {/* Webinars Section */}
-          <Card className="overflow-hidden rounded-3xl border-0 shadow-lg transition-all hover:shadow-2xl hover:scale-105">
-            <div className="flex flex-col items-center justify-center bg-gradient-to-b from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-950 px-6 py-10">
-              <img
-                src="/Webinar-cuate.svg"
-                alt="Webinaires"
-                className="h-48 w-48 object-contain"
-              />
-              <h3 className="mt-6 text-2xl font-bold text-gray-800 dark:text-white">
-                Sessions en Direct
-              </h3>
-              <p className="mt-3 text-center text-base text-gray-700 dark:text-gray-300">
-                Apprends en live avec tes tuteurs
-              </p>
-              <Button
-                asChild
-                className="mt-6 h-12 w-full rounded-xl text-base font-semibold"
-              >
-                <Link href="/student/sessions">Voir les sessions</Link>
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </section>
     </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number | string;
+  hint: string;
+}) {
+  return (
+    <Card className="rounded-2xl border-border/70 shadow-sm">
+      <CardContent className="flex items-center justify-between gap-3 p-5">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+            {value}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+        </div>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QuickLink({
+  href,
+  icon: Icon,
+  title,
+  description,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-start gap-3 rounded-xl border border-border/70 bg-background p-4 transition hover:border-primary/40 hover:bg-muted/40"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Icon className="h-4 w-4 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+      </div>
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+    </Link>
   );
 }

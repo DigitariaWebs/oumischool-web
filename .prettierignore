@@ -1,0 +1,21 @@
+# Build output
+.next/
+out/
+build/
+dist/
+coverage/
+
+# Dependencies
+node_modules/
+
+# Worktrees / agent workspaces
+.kilo/
+
+# Generated files
+next-env.d.ts
+*.tsbuildinfo
+
+# Lockfiles
+package-lock.json
+pnpm-lock.yaml
+yarn.lock

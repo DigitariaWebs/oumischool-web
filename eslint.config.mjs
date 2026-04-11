@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees — they contain throwaway copies of the repo that
+    // should not be linted as part of the main project.
+    ".kilo/**",
   ]),
 ]);
 

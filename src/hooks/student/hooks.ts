@@ -46,6 +46,29 @@ export function useMarkStudentCalendarEventDone(id: string) {
   });
 }
 
+export function useStartStudentCalendarEvent(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => studentApi.startCalendarEvent(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: studentKeys.events() });
+      qc.invalidateQueries({ queryKey: studentKeys.eventDetail(id) });
+    },
+  });
+}
+
+export function useUpdateStudentCalendarEventProgress(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (progress: number) =>
+      studentApi.updateCalendarEventProgress(id, progress),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: studentKeys.events() });
+      qc.invalidateQueries({ queryKey: studentKeys.eventDetail(id) });
+    },
+  });
+}
+
 export function useStudentAssignedLessons() {
   return useQuery({
     queryKey: studentKeys.lessons(),

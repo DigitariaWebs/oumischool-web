@@ -161,6 +161,14 @@ export const studentApi = {
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
       status: "COMPLETED",
     }),
+  startCalendarEvent: (id: string) =>
+    api.put<{ success: boolean }>(`/calendar/events/${id}`, {
+      status: "IN_PROGRESS",
+    }),
+  updateCalendarEventProgress: (id: string, progress: number) =>
+    api.put<{ success: boolean }>(`/calendar/events/${id}`, {
+      progress: Math.max(0, Math.min(100, Math.round(progress))),
+    }),
   assignedLessons: async () => {
     const res = await api.get<unknown>("/lessons/assigned");
     return asArray<Record<string, unknown>>(res).map((raw) => ({

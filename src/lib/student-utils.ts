@@ -133,6 +133,73 @@ export function getScheduleSourceLabel(
     : "Planifiée par parent";
 }
 
+/**
+ * Localize a raw backend status string (e.g. "SCHEDULED", "ACCEPTED") to French.
+ * Returns the original normalized string if unknown so nothing is ever hidden.
+ */
+export function getStatusLabel(status: string | null | undefined): string {
+  const normalized = String(status ?? "")
+    .trim()
+    .toUpperCase();
+
+  switch (normalized) {
+    case "SCHEDULED":
+      return "Planifié";
+    case "IN_PROGRESS":
+      return "En cours";
+    case "COMPLETED":
+    case "DONE":
+      return "Terminé";
+    case "CANCELLED":
+    case "CANCELED":
+      return "Annulé";
+    case "REJECTED":
+      return "Refusé";
+    case "ACCEPTED":
+      return "Accepté";
+    case "PENDING":
+      return "En attente";
+    case "NOT_STARTED":
+      return "À commencer";
+    case "FAILED":
+      return "Échec";
+    case "":
+      return "—";
+    default:
+      return normalized.charAt(0) + normalized.slice(1).toLowerCase();
+  }
+}
+
+/**
+ * Tailwind classes for coloring a status badge (neutral palette,
+ * keeps the UI calm and avoids heavy greens).
+ */
+export function getStatusBadgeClasses(
+  status: string | null | undefined,
+): string {
+  const normalized = String(status ?? "")
+    .trim()
+    .toUpperCase();
+
+  switch (normalized) {
+    case "COMPLETED":
+    case "DONE":
+      return "bg-primary/10 text-primary border-primary/20";
+    case "IN_PROGRESS":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "CANCELLED":
+    case "CANCELED":
+    case "REJECTED":
+    case "FAILED":
+      return "bg-rose-100 text-rose-700 border-rose-200";
+    case "ACCEPTED":
+    case "SCHEDULED":
+      return "bg-slate-100 text-slate-700 border-slate-200";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
 export function getResourceTypeLabel(type: string): string {
   const normalized = type.trim().toLowerCase();
 

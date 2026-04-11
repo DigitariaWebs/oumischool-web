@@ -66,16 +66,13 @@ export async function GET(request: NextRequest) {
 
   // Determine what we're proxying
   let proxyUrl: string;
-  let method: "GET" | "POST" = "GET";
-  let isResourceDownloadEndpoint = false;
+  const method = "GET" as const;
 
   if (resourceId) {
     // Use /resources/{id}/download-secure GET endpoint to fetch file directly with auth
     const backendUrl =
       process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
     proxyUrl = `${backendUrl}/resources/${resourceId}/download-secure`;
-    method = "GET";
-    isResourceDownloadEndpoint = false;
     console.log(
       "[Proxy] ✅ MODE: Resource download-secure endpoint (GET):",
       proxyUrl,
@@ -136,7 +133,6 @@ export async function GET(request: NextRequest) {
     let response = await fetch(proxyUrl, {
       method,
       headers,
-      body: method === "POST" ? JSON.stringify({}) : undefined,
       credentials: "include",
     });
 
@@ -157,7 +153,6 @@ export async function GET(request: NextRequest) {
       response = await fetch(proxyUrl, {
         method,
         headers: headersWithoutAuth,
-        body: method === "POST" ? JSON.stringify({}) : undefined,
       });
       console.log(
         "[Proxy] Retry status:",
@@ -186,7 +181,10 @@ export async function GET(request: NextRequest) {
 
     // Use getMimeType to infer content type from URL and response headers
     const backendContentType = response.headers.get("content-type");
-    const finalContentType = getMimeType(proxyUrl, backendContentType);
+    const finalContentType = getMimeType(
+      proxyUrl,
+      backendContentType ?? undefined,
+    );
     console.log(
       "[Proxy] Content-Type:",
       finalContentType,

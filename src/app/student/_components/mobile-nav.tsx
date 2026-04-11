@@ -1,16 +1,16 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { BookOpen, Gamepad2, House, Trophy, UserCircle2 } from "lucide-react";
+import { BookOpen, Gamepad2, House, Settings, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { title: "Leçons", href: "/student", icon: House },
+  { title: "Accueil", href: "/student", icon: House },
   { title: "Jeux", href: "/student/exercises", icon: Gamepad2 },
   { title: "Biblio", href: "/student/resources", icon: BookOpen },
   { title: "Progrès", href: "/student/progress", icon: Trophy },
-  { title: "Profil", href: "/student/profile", icon: UserCircle2 },
+  { title: "Réglages", href: "/student/settings", icon: Settings },
 ];
 
 export function StudentMobileNav() {
