@@ -3,39 +3,11 @@ import {
   Lesson,
   LessonSeries,
   ScheduleSession,
-  Subject,
   Tutor,
   TutorResource,
   TutorRevenue,
   TutorSchedule,
 } from "@/types";
-
-export const mockSubjects: Subject[] = [
-  { id: "s1", name: "Physique", color: "oklch(0.65 0.12 220)" },
-  { id: "s2", name: "Conception UI/UX", color: "oklch(0.58 0.16 155)" },
-  { id: "s3", name: "Mathématiques", color: "oklch(0.72 0.14 80)" },
-  { id: "s4", name: "Conception graphique", color: "oklch(0.68 0.18 20)" },
-  { id: "s5", name: "Typographie", color: "oklch(0.52 0.14 250)" },
-  { id: "s6", name: "Couleurs et éléments", color: "oklch(0.62 0.16 340)" },
-  { id: "s7", name: "Objets 3D", color: "oklch(0.60 0.13 180)" },
-];
-
-export function getSubjectById(id: string): Subject | undefined {
-  return mockSubjects.find((s) => s.id === id);
-}
-
-export function getSubjectColor(id: string): string {
-  return getSubjectById(id)?.color ?? "oklch(0.58 0.16 155)";
-}
-
-export function getSubjectName(id: string): string {
-  return getSubjectById(id)?.name ?? "Cours planifié";
-}
-
-/** @deprecated use subjectIds + mockSubjects */
-export const subjectColors: Record<string, string> = Object.fromEntries(
-  mockSubjects.map((s) => [s.name, s.color]),
-);
 
 export const statusStyles = {
   active: {
