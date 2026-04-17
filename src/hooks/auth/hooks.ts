@@ -1,15 +1,31 @@
 "use client";
 
-import { authApi, LoginPayload } from "./api";
+import {
+  authApi,
+  ChangePasswordPayload,
+  LoginPayload,
+  UpdateProfilePayload,
+} from "./api";
 import { authKeys } from "./keys";
 import { clearAuthToken, setAuthToken } from "@/lib/api-client";
+import { isWebAllowedRole, mapBackendRole } from "@/lib/auth-role";
 import { useAuthStore } from "@/store/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+export const WEB_ROLE_BLOCKED_MESSAGE =
+  "L'accès web est réservé aux élèves et administrateurs. Utilise l'app mobile.";
 
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: LoginPayload) => authApi.login(payload),
+    mutationFn: async (payload: LoginPayload) => {
+      const data = await authApi.login(payload);
+      const role = mapBackendRole(data.user.role);
+      if (!isWebAllowedRole(role)) {
+        throw new Error(WEB_ROLE_BLOCKED_MESSAGE);
+      }
+      return data;
+    },
     onSuccess: (data) => {
       setAuthToken(data.tokens.accessToken);
       localStorage.setItem("refresh_token", data.tokens.refreshToken);
@@ -53,6 +69,25 @@ export function useStudentChildId() {
 export function useVerifyEmail() {
   return useMutation({
     mutationFn: (token: string) => authApi.verifyEmail(token),
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (payload: ChangePasswordPayload) =>
+      authApi.changePassword(payload),
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpdateProfilePayload) =>
+      authApi.updateProfile(payload),
+    onSuccess: (data) => {
+      useAuthStore.getState().setUser(data);
+      qc.setQueryData(authKeys.profile(), data);
+    },
   });
 }
 

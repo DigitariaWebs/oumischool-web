@@ -157,6 +157,10 @@ export function getStatusLabel(status: string | null | undefined): string {
       return "Refusé";
     case "ACCEPTED":
       return "Accepté";
+    case "REQUESTED":
+      return "En attente";
+    case "PENDING_PAYMENT":
+      return "Paiement requis";
     case "PENDING":
       return "En attente";
     case "NOT_STARTED":
@@ -195,6 +199,10 @@ export function getStatusBadgeClasses(
     case "ACCEPTED":
     case "SCHEDULED":
       return "bg-slate-100 text-slate-700 border-slate-200";
+    case "REQUESTED":
+      return "bg-blue-100 text-blue-700 border-blue-200";
+    case "PENDING_PAYMENT":
+      return "bg-amber-100 text-amber-800 border-amber-200";
     default:
       return "bg-muted text-muted-foreground border-border";
   }

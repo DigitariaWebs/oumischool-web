@@ -21,7 +21,7 @@ import {
   useStartStudentCalendarEvent,
   useStudentCalendarEventDetail,
 } from "@/hooks/student";
-import { StudentResource } from "@/hooks/student/api";
+import { StudentResource, studentApi } from "@/hooks/student/api";
 import {
   computeDurationMinutes,
   getStatusBadgeClasses,
@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   Clock,
   FileText,
+  Lock,
   PlayCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -276,6 +277,101 @@ export default function StudentCalendarEventDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Lesson materials */}
+            {query.data.lesson ? (
+              <Card className="rounded-2xl border-border/70 shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                        {query.data.lesson.title}
+                      </CardTitle>
+                      {query.data.lesson.description ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {query.data.lesson.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 rounded-full border-border/70 text-[10px] text-muted-foreground"
+                    >
+                      Leçon
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {query.data.lesson.materials.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Aucun matériel dans cette leçon.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {query.data.lesson.materials.map((material, idx) => {
+                        const canOpen =
+                          !material.locked && !!material.resourceId;
+                        return (
+                          <li key={material.id}>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!canOpen || !material.resourceId) return;
+                                try {
+                                  const resource = await studentApi.resource(
+                                    material.resourceId,
+                                  );
+                                  setSelectedResource(resource);
+                                } catch {
+                                  /* ignore */
+                                }
+                              }}
+                              disabled={!canOpen}
+                              className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-background p-3 text-left transition enabled:hover:border-primary/40 enabled:hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              <div
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${
+                                  material.locked
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {material.locked ? (
+                                  <Lock className="h-4 w-4" />
+                                ) : (
+                                  idx + 1
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {material.title}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {material.locked
+                                    ? "Ressource non débloquée"
+                                    : material.resourceId
+                                      ? "Clique pour ouvrir"
+                                      : "Aucune ressource liée"}
+                                </p>
+                              </div>
+                              {material.locked ? (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 rounded-full border-amber-300/70 bg-amber-50 text-[10px] text-amber-700"
+                                >
+                                  Verrouillé
+                                </Badge>
+                              ) : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Resources list */}
             <Card className="rounded-2xl border-border/70 shadow-sm">

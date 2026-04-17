@@ -14,6 +14,21 @@ export interface StudentSession {
   price?: number | null;
 }
 
+export interface LessonMaterial {
+  id: string;
+  title: string;
+  resourceId: string | null;
+  locked: boolean;
+}
+
+export interface EventLesson {
+  id: string;
+  title: string;
+  description: string | null;
+  grade: string | null;
+  materials: LessonMaterial[];
+}
+
 export interface StudentCalendarEvent {
   id: string;
   title: string;
@@ -24,17 +39,8 @@ export interface StudentCalendarEvent {
   status?: string | null;
   type?: string;
   resources?: StudentResource[];
-}
-
-export interface StudentLesson {
-  id: string;
-  title: string;
-  description?: string | null;
-  subject?: { id?: string; name?: string; color?: string } | null;
-  startTime: string;
-  endTime: string;
-  meetingLink?: string | null;
-  sessionId?: string;
+  lessonId?: string | null;
+  lesson?: EventLesson | null;
 }
 
 export interface StudentResource {
@@ -99,6 +105,41 @@ function pickSession(raw: Record<string, unknown>): StudentSession {
   };
 }
 
+function pickEventLesson(raw: unknown): EventLesson | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    id: String(r.id ?? ""),
+    title: String(r.title ?? "Leçon"),
+    description: (r.description as string | null) ?? null,
+    grade: (r.grade as string | null) ?? null,
+    materials: asArray<Record<string, unknown>>(r.materials).map((m) => ({
+      id: String(m.id ?? ""),
+      title: String(m.title ?? ""),
+      resourceId: (m.resourceId as string | null) ?? null,
+      locked: Boolean(m.locked),
+    })),
+  };
+}
+
+function pickCalendarEvent(raw: Record<string, unknown>): StudentCalendarEvent {
+  return {
+    id: String(raw.id ?? ""),
+    title: String(raw.title ?? "Événement"),
+    description: (raw.description as string | null) ?? null,
+    subject: (raw.subject as StudentCalendarEvent["subject"]) ?? null,
+    startTime: String(raw.startTime ?? raw.start ?? new Date().toISOString()),
+    endTime: String(raw.endTime ?? raw.end ?? new Date().toISOString()),
+    status: (raw.status as string | null) ?? "SCHEDULED",
+    type: String(raw.type ?? "self_directed"),
+    resources: asArray<Record<string, unknown>>(raw.resources).map(
+      pickResource,
+    ),
+    lessonId: (raw.lessonId as string | null) ?? null,
+    lesson: pickEventLesson(raw.lesson),
+  };
+}
+
 function pickResource(raw: Record<string, unknown>): StudentResource {
   return {
     id: String(raw.id ?? ""),
@@ -125,37 +166,13 @@ export const studentApi = {
   },
   calendarEvents: async () => {
     const res = await api.get<unknown>("/calendar/events");
-    return asArray<Record<string, unknown>>(res).map((raw) => ({
-      id: String(raw.id ?? ""),
-      title: String(raw.title ?? "Événement"),
-      description: (raw.description as string | null) ?? null,
-      subject: (raw.subject as StudentCalendarEvent["subject"]) ?? null,
-      startTime: String(raw.startTime ?? raw.start ?? new Date().toISOString()),
-      endTime: String(raw.endTime ?? raw.end ?? new Date().toISOString()),
-      status: (raw.status as string | null) ?? "SCHEDULED",
-      type: String(raw.type ?? "self_directed"),
-      resources: asArray<Record<string, unknown>>(raw.resources).map(
-        pickResource,
-      ),
-    }));
+    return asArray<Record<string, unknown>>(res).map(pickCalendarEvent);
   },
   calendarEventDetail: async (id: string) => {
     const raw = await api.get<Record<string, unknown>>(
       `/calendar/events/${id}`,
     );
-    return {
-      id: String(raw.id ?? ""),
-      title: String(raw.title ?? "Événement"),
-      description: (raw.description as string | null) ?? null,
-      subject: (raw.subject as StudentCalendarEvent["subject"]) ?? null,
-      startTime: String(raw.startTime ?? raw.start ?? new Date().toISOString()),
-      endTime: String(raw.endTime ?? raw.end ?? new Date().toISOString()),
-      status: (raw.status as string | null) ?? "SCHEDULED",
-      type: String(raw.type ?? "self_directed"),
-      resources: asArray<Record<string, unknown>>(raw.resources).map(
-        pickResource,
-      ),
-    } as StudentCalendarEvent;
+    return pickCalendarEvent(raw);
   },
   markCalendarEventDone: (id: string) =>
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
@@ -169,22 +186,13 @@ export const studentApi = {
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
       progress: Math.max(0, Math.min(100, Math.round(progress))),
     }),
-  assignedLessons: async () => {
-    const res = await api.get<unknown>("/lessons/assigned");
-    return asArray<Record<string, unknown>>(res).map((raw) => ({
-      id: String(raw.id ?? ""),
-      title: String(raw.title ?? "Leçon"),
-      description: (raw.description as string | null) ?? null,
-      subject: (raw.subject as StudentLesson["subject"]) ?? null,
-      startTime: String(raw.startTime ?? raw.start ?? new Date().toISOString()),
-      endTime: String(raw.endTime ?? raw.end ?? new Date().toISOString()),
-      meetingLink: (raw.meetingLink as string | null) ?? null,
-      sessionId: (raw.sessionId as string | undefined) ?? undefined,
-    }));
-  },
   resources: async () => {
     const res = await api.get<unknown>("/resources");
     return asArray<Record<string, unknown>>(res).map(pickResource);
+  },
+  resource: async (id: string) => {
+    const res = await api.get<Record<string, unknown>>(`/resources/${id}`);
+    return pickResource(res);
   },
   resourceDownload: (id: string) =>
     api.post<{ url?: string; fileUrl?: string } & StudentResource>(

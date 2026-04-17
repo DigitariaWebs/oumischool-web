@@ -8,10 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  useStudentAssignedLessons,
-  useStudentCalendarEvents,
-} from "@/hooks/student";
+import { useStudentCalendarEvents } from "@/hooks/student";
 import type { StudentCalendarEvent } from "@/hooks/student/api";
 import {
   computeDurationMinutes,
@@ -24,6 +21,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
+  Lock,
   PlayCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -46,7 +44,6 @@ function statusBucket(status: string | null | undefined): LessonFilter {
 
 export default function LessonsPage() {
   const eventsQuery = useStudentCalendarEvents();
-  const assignedQuery = useStudentAssignedLessons();
   const [filter, setFilter] = useState<LessonFilter>("all");
 
   const selfDirectedLessons = useMemo(
@@ -72,7 +69,7 @@ export default function LessonsPage() {
     return selfDirectedLessons.filter((l) => statusBucket(l.status) === filter);
   }, [selfDirectedLessons, filter]);
 
-  const isLoading = eventsQuery.isLoading || assignedQuery.isLoading;
+  const isLoading = eventsQuery.isLoading;
   const isError = eventsQuery.isError;
 
   return (
@@ -154,6 +151,8 @@ export default function LessonsPage() {
                 lesson.endTime,
               );
               const resourcesCount = lesson.resources?.length ?? 0;
+              const hasLockedMaterial =
+                lesson.lesson?.materials.some((m) => m.locked) ?? false;
               return (
                 <Link
                   key={lesson.id}
@@ -198,6 +197,15 @@ export default function LessonsPage() {
                             >
                               {resourcesCount} ressource
                               {resourcesCount > 1 ? "s" : ""}
+                            </Badge>
+                          ) : null}
+                          {hasLockedMaterial ? (
+                            <Badge
+                              variant="outline"
+                              className="flex items-center gap-1 rounded-full border-amber-300/70 bg-amber-50 text-[11px] text-amber-700"
+                            >
+                              <Lock className="h-3 w-3" />
+                              Verrouillé
                             </Badge>
                           ) : null}
                         </div>

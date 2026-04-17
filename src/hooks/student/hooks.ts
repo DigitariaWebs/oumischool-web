@@ -69,13 +69,6 @@ export function useUpdateStudentCalendarEventProgress(id: string) {
   });
 }
 
-export function useStudentAssignedLessons() {
-  return useQuery({
-    queryKey: studentKeys.lessons(),
-    queryFn: studentApi.assignedLessons,
-  });
-}
-
 export function useStudentResources() {
   return useQuery({
     queryKey: studentKeys.resources(),

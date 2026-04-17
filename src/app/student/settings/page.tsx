@@ -3,80 +3,105 @@
 import { StudentPageHeader } from "../_components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bell, Download, Info, Lock, Mail, MessageSquare } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  useAuthProfile,
+  useChangePassword,
+  useUpdateProfile,
+} from "@/hooks/auth";
+import { Info, Loader2, Lock, Mail } from "lucide-react";
+import { useState } from "react";
 
 export default function StudentSettingsPage() {
+  const profileQuery = useAuthProfile(true);
+  const changePassword = useChangePassword();
+  const updateProfile = useUpdateProfile();
+
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+
+  const resetPasswordForm = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setNewPasswordConfirm("");
+    setPasswordError(null);
+    setPasswordSuccess(null);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    if (newPassword.length < 8) {
+      setPasswordError(
+        "Le nouveau mot de passe doit faire au moins 8 caractères.",
+      );
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+    try {
+      await changePassword.mutateAsync({ currentPassword, newPassword });
+      setPasswordSuccess("Mot de passe mis à jour.");
+      setTimeout(() => {
+        setPasswordOpen(false);
+        resetPasswordForm();
+      }, 900);
+    } catch (err) {
+      setPasswordError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de modifier le mot de passe.",
+      );
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+    setEmailSuccess(null);
+    if (!email.includes("@")) {
+      setEmailError("Adresse email invalide.");
+      return;
+    }
+    try {
+      await updateProfile.mutateAsync({ email });
+      setEmailSuccess("Email mis à jour.");
+      setTimeout(() => setEmailOpen(false), 900);
+    } catch (err) {
+      setEmailError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de mettre à jour l'email.",
+      );
+    }
+  };
+
   return (
     <div className="flex min-h-full flex-col">
-      <StudentPageHeader
-        title="Paramètres"
-        subtitle="Gère tes préférences et ton compte"
-      />
+      <StudentPageHeader title="Paramètres" subtitle="Gère ton compte" />
 
       <div className="mx-auto w-full max-w-3xl space-y-5 p-4 md:p-8">
-        {/* Notifications */}
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
-              <Bell className="h-4 w-4 text-muted-foreground" />
-              Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  Notifications des sessions
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Reçois une alerte pour tes nouvelles sessions
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                className="h-4 w-4 cursor-pointer accent-primary"
-                defaultChecked
-                aria-label="Activer les notifications de sessions"
-              />
-            </div>
-            <div className="border-t border-border/60 pt-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    Rappels de devoirs
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Notifications pour les leçons à faire
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 cursor-pointer accent-primary"
-                  defaultChecked
-                  aria-label="Activer les rappels de devoirs"
-                />
-              </div>
-            </div>
-            <div className="border-t border-border/60 pt-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    Emails de l&apos;école
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Reçois les mises à jour par email
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 cursor-pointer accent-primary"
-                  aria-label="Activer les emails de l'école"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Compte & sécurité */}
         <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader className="pb-3">
@@ -86,90 +111,39 @@ export default function StudentSettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 p-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Email
+                </p>
+                <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+                  {profileQuery.data?.email ?? "—"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEmailError(null);
+                  setEmailSuccess(null);
+                  setEmail(profileQuery.data?.email ?? "");
+                  setEmailOpen(true);
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Modifier
+              </Button>
+            </div>
             <Button
               variant="outline"
               className="h-10 w-full justify-start rounded-xl text-sm font-medium"
+              onClick={() => {
+                resetPasswordForm();
+                setPasswordOpen(true);
+              }}
             >
               <Lock className="mr-2 h-4 w-4" />
               Modifier mon mot de passe
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10 w-full justify-start rounded-xl text-sm font-medium"
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Mettre à jour mon email
-            </Button>
-            <p className="pt-1 text-xs text-muted-foreground">
-              Tes données sont chiffrées et protégées selon le RGPD.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Mes données */}
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
-              <Download className="h-4 w-4 text-muted-foreground" />
-              Mes données
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Télécharger mes données
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Récupère une copie de toutes tes données personnelles
-              </p>
-              <Button
-                variant="outline"
-                className="mt-3 h-10 w-full rounded-xl text-sm font-medium sm:w-auto"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Télécharger (JSON)
-              </Button>
-            </div>
-            <div className="border-t border-border/60 pt-4">
-              <p className="text-sm font-medium text-foreground">
-                Supprimer mon compte
-              </p>
-              <p className="mt-0.5 text-xs text-rose-600">
-                Cette action est irréversible. Toutes tes données seront
-                supprimées.
-              </p>
-              <Button
-                variant="destructive"
-                className="mt-3 h-10 w-full rounded-xl text-sm font-medium sm:w-auto"
-              >
-                Supprimer mon compte
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Support */}
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2.5 text-base font-semibold">
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              Support
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              variant="outline"
-              className="h-10 w-full justify-start rounded-xl text-sm font-medium"
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Signaler un problème
-            </Button>
-            <Button
-              variant="outline"
-              className="h-10 w-full justify-start rounded-xl text-sm font-medium"
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Proposer une amélioration
             </Button>
           </CardContent>
         </Card>
@@ -183,35 +157,167 @@ export default function StudentSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Version</span>
-              <span className="font-medium text-foreground">2.0.1</span>
+              <span className="text-muted-foreground">Rôle</span>
+              <span className="font-medium text-foreground">
+                {profileQuery.data?.role ?? "—"}
+              </span>
             </div>
             <div className="flex items-center justify-between border-t border-border/60 pt-3">
               <span className="text-muted-foreground">Développé par</span>
               <span className="font-medium text-foreground">
-                OumiSchool · 2024-2026
+                OumiSchool · 2026
               </span>
-            </div>
-            <div className="border-t border-border/60 pt-3">
-              <p className="mb-2 text-muted-foreground">Liens utiles</p>
-              <div className="space-y-1.5">
-                <a
-                  href="#"
-                  className="block text-sm text-primary hover:underline"
-                >
-                  Conditions d&apos;utilisation
-                </a>
-                <a
-                  href="#"
-                  className="block text-sm text-primary hover:underline"
-                >
-                  Politique de confidentialité
-                </a>
-              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Password dialog */}
+      <Dialog
+        open={passwordOpen}
+        onOpenChange={(open) => {
+          setPasswordOpen(open);
+          if (!open) resetPasswordForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier le mot de passe</DialogTitle>
+            <DialogDescription>
+              Entre ton mot de passe actuel puis choisis-en un nouveau (8
+              caractères minimum).
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangePassword} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="currentPassword">Mot de passe actuel</Label>
+              <Input
+                id="currentPassword"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="newPasswordConfirm">Confirmer</Label>
+              <Input
+                id="newPasswordConfirm"
+                type="password"
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+            {passwordError ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {passwordError}
+              </p>
+            ) : null}
+            {passwordSuccess ? (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                {passwordSuccess}
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPasswordOpen(false)}
+                disabled={changePassword.isPending}
+              >
+                Annuler
+              </Button>
+              <Button type="submit" disabled={changePassword.isPending}>
+                {changePassword.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  "Enregistrer"
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email dialog */}
+      <Dialog
+        open={emailOpen}
+        onOpenChange={(open) => {
+          setEmailOpen(open);
+          if (!open) {
+            setEmailError(null);
+            setEmailSuccess(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mettre à jour mon email</DialogTitle>
+            <DialogDescription>
+              Cette adresse sera utilisée pour te connecter et recevoir les
+              messages de l&apos;école.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateEmail} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Nouvelle adresse email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            {emailError ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {emailError}
+              </p>
+            ) : null}
+            {emailSuccess ? (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                {emailSuccess}
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEmailOpen(false)}
+                disabled={updateProfile.isPending}
+              >
+                Annuler
+              </Button>
+              <Button type="submit" disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  "Enregistrer"
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

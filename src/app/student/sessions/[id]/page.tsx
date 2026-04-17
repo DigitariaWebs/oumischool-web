@@ -12,7 +12,10 @@ import { useStudentSessionDetail } from "@/hooks/student";
 import {
   computeDurationMinutes,
   getSessionModeLabel,
+  getStatusBadgeClasses,
+  getStatusLabel,
 } from "@/lib/student-utils";
+import { Video } from "lucide-react";
 import { useParams } from "next/navigation";
 
 export default function StudentSessionDetailPage() {
@@ -39,20 +42,21 @@ export default function StudentSessionDetailPage() {
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <CardTitle>{query.data.title}</CardTitle>
-                <Badge variant="secondary">
-                  {getSessionModeLabel(query.data.mode)}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${getStatusBadgeClasses(
+                      query.data.status,
+                    )}`}
+                  >
+                    {getStatusLabel(query.data.status)}
+                  </span>
+                  <Badge variant="secondary">
+                    {getSessionModeLabel(query.data.mode)}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <p>
-                <span className="text-muted-foreground">Statut:</span>{" "}
-                {query.data.status}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Mode:</span>{" "}
-                {query.data.mode ?? "-"}
-              </p>
               <p>
                 <span className="text-muted-foreground">Date:</span>{" "}
                 {new Date(query.data.startTime).toLocaleString("fr-FR")}
@@ -66,8 +70,8 @@ export default function StudentSessionDetailPage() {
                 min
               </p>
               <p>
-                <span className="text-muted-foreground">Prix:</span>{" "}
-                {query.data.price ?? 0}
+                <span className="text-muted-foreground">Matière:</span>{" "}
+                {query.data.subject?.name ?? query.data.subjectName ?? "-"}
               </p>
               <p>
                 <span className="text-muted-foreground">Intervenant:</span>{" "}
@@ -75,23 +79,30 @@ export default function StudentSessionDetailPage() {
                   (`${query.data.tutor?.firstName ?? ""} ${query.data.tutor?.lastName ?? ""}`.trim() ||
                     "-")}
               </p>
+              <p>
+                <span className="text-muted-foreground">Prix:</span>{" "}
+                {query.data.price ?? 0} €
+              </p>
 
-              {query.data.meetingLink ? (
-                <Button asChild>
+              {String(query.data.status ?? "").toUpperCase() === "SCHEDULED" &&
+              query.data.meetingLink ? (
+                <Button asChild className="mt-2">
                   <a
                     href={query.data.meetingLink}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Ouvrir le meeting
+                    <Video className="mr-2 h-4 w-4" />
+                    Rejoindre la session
                   </a>
                 </Button>
-              ) : (
+              ) : String(query.data.status ?? "").toUpperCase() ===
+                "SCHEDULED" ? (
                 <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
                   Le lien de meeting n’est pas encore disponible. Merci de
-                  patienter.
+                  patienter — ton tuteur l’ajoutera bientôt.
                 </p>
-              )}
+              ) : null}
             </CardContent>
           </Card>
         ) : null}

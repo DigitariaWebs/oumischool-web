@@ -11,8 +11,10 @@ export function mapBackendRole(role: string | null | undefined): AppRole {
 
 export function getHomeRouteByRole(role: AppRole): string {
   if (role === "child") return "/student";
-  if (role === "parent") return "/parent";
-  if (role === "tutor") return "/tutor";
   if (role === "admin") return "/dashboard";
-  return "/sign-in";
+  return "/sign-in?reason=role_blocked";
+}
+
+export function isWebAllowedRole(role: AppRole): boolean {
+  return role === "child" || role === "admin";
 }

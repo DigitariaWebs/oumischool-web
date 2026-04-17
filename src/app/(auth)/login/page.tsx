@@ -35,7 +35,7 @@ function LoginForm() {
 
   const roleError =
     params.get("reason") === "role_blocked"
-      ? "Accès refusé pour ce rôle."
+      ? "L'accès web est réservé aux élèves et administrateurs. Utilise l'app mobile."
       : null;
 
   const handleSubmit = async (e: React.FormEvent) => {

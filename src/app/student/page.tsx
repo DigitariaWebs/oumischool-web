@@ -9,11 +9,7 @@ import { resolveDashboardUiState } from "./dashboard-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  useStudentAssignedLessons,
-  useStudentCalendarEvents,
-  useStudentSessions,
-} from "@/hooks/student";
+import { useStudentCalendarEvents, useStudentSessions } from "@/hooks/student";
 import {
   computeDurationMinutes,
   filterScheduleItemsByView,
@@ -79,7 +75,15 @@ export default function StudentDashboardPage() {
   const user = useAuthStore((s) => s.user);
   const sessionsQuery = useStudentSessions();
   const eventsQuery = useStudentCalendarEvents();
-  const lessonsQuery = useStudentAssignedLessons();
+
+  const assignedLessonCount = useMemo(
+    () =>
+      (eventsQuery.data ?? []).filter(
+        (e) =>
+          String(e.type ?? "").toLowerCase() === "self_directed" && !!e.lesson,
+      ).length,
+    [eventsQuery.data],
+  );
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mode, setMode] = useState<"day" | "week">("week");
@@ -187,7 +191,7 @@ export default function StudentDashboardPage() {
           <StatCard
             icon={BookOpen}
             label="Leçons assignées"
-            value={lessonsQuery.data?.length ?? 0}
+            value={assignedLessonCount}
             hint="à travailler"
           />
           <StatCard
