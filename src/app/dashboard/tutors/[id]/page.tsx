@@ -1,10 +1,18 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Modal } from "@/components/ui/modal";
 import { ScheduleView } from "@/components/ui/schedule-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDeleteLesson } from "@/hooks/lessons";
 import {
   useApproveTutor,
   useDeactivateTutor,
@@ -44,12 +52,15 @@ import {
   MapPin,
   Mic,
   Monitor,
+  MoreHorizontal,
+  Pencil,
   Phone,
   PlayCircle,
   Repeat2,
   Tag,
   ShoppingCart,
   Star,
+  Trash2,
   TrendingUp,
   Users,
   Video,
@@ -421,6 +432,47 @@ function createTutorFromDetail(
 
 // ─── Lessons Section ──────────────────────────────────────────────────────────
 
+function LessonActions({
+  lessonId,
+  onDelete,
+}: {
+  lessonId: string;
+  onDelete: (id: string) => void;
+}) {
+  const router = useRouter();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 rounded-lg p-0 text-muted-foreground hover:text-foreground"
+          aria-label="Actions"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem
+          className="gap-2 text-sm"
+          onClick={() => router.push(`/dashboard/lessons?edit=${lessonId}`)}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Modifier
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="gap-2 text-sm text-destructive focus:text-destructive"
+          onClick={() => onDelete(lessonId)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Supprimer
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TutorLessonsSection({
   subjectIds,
   lessons,
@@ -432,6 +484,14 @@ function TutorLessonsSection({
   series: LessonSeries[];
   color: string;
 }) {
+  const deleteLesson = useDeleteLesson();
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  async function handleConfirmDelete() {
+    if (!deleteTargetId) return;
+    await deleteLesson.mutateAsync(deleteTargetId);
+    setDeleteTargetId(null);
+  }
   const subjects = subjectIds.map((id) => ({
     id,
     name: getSubjectName(id),
@@ -591,6 +651,10 @@ function TutorLessonsSection({
                           <Clock className="h-3 w-3" />
                           {lesson.duration}
                         </div>
+                        <LessonActions
+                          lessonId={lesson.id}
+                          onDelete={setDeleteTargetId}
+                        />
                         {i < lessons.length - 1 && (
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                         )}
@@ -669,6 +733,10 @@ function TutorLessonsSection({
                         <Clock className="h-3 w-3" />
                         {lesson.duration}
                       </div>
+                      <LessonActions
+                        lessonId={lesson.id}
+                        onDelete={setDeleteTargetId}
+                      />
                     </div>
                   ))}
                 </div>
@@ -677,6 +745,35 @@ function TutorLessonsSection({
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!deleteTargetId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+        type="warning"
+        title="Supprimer la leçon"
+        description="Cette action est irréversible."
+        size="sm"
+        actions={{
+          primary: {
+            label: deleteLesson.isPending ? "Suppression…" : "Supprimer",
+            onClick: handleConfirmDelete,
+            variant: "destructive",
+            disabled: deleteLesson.isPending,
+            loading: deleteLesson.isPending,
+          },
+          secondary: {
+            label: "Annuler",
+            onClick: () => setDeleteTargetId(null),
+            variant: "outline",
+          },
+        }}
+      >
+        <p className="text-sm text-muted-foreground">
+          Les sessions liées à cette leçon pourraient être affectées.
+        </p>
+      </Modal>
     </div>
   );
 }

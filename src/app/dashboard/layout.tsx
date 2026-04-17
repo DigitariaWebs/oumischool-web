@@ -59,6 +59,11 @@ const menuSections = [
         icon: BookOpen,
       },
       {
+        title: "Leçons",
+        url: "/dashboard/lessons",
+        icon: BookOpen,
+      },
+      {
         title: "Matières",
         url: "/dashboard/subjects",
         icon: GraduationCap,
