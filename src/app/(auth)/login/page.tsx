@@ -4,13 +4,69 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProfile, useLogin } from "@/hooks/auth";
-import { getAuthToken } from "@/lib/api-client";
+import { authApi } from "@/hooks/auth/api";
+import { getAuthToken, setAuthToken } from "@/lib/api-client";
 import { getHomeRouteByRole, mapBackendRole } from "@/lib/auth-role";
 import { useAuthStore } from "@/store/auth";
 import { BookOpen, Eye, EyeOff, Loader2, Users } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+
+const DEV_ACCOUNTS = [
+  {
+    label: "Admin",
+    email: "superadmin@email.com",
+    password: "password123",
+    color: "oklch(0.52 0.18 280)",
+  },
+  {
+    label: "Student",
+    email: "student@email.com",
+    password: "password123",
+    color: "oklch(0.52 0.16 155)",
+  },
+] as const;
+
+function DevLoginBar({
+  onLogin,
+}: {
+  onLogin: (email: string, password: string, role: string) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState<string | null>(null);
+  if (process.env.NODE_ENV === "production") return null;
+
+  return (
+    <div className="mt-6 rounded-xl border border-dashed border-yellow-400/60 bg-yellow-50/40 dark:bg-yellow-950/20 p-3">
+      <p className="text-[10px] font-semibold text-yellow-700/70 dark:text-yellow-400/60 uppercase tracking-widest mb-2">
+        Dev quick login
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {DEV_ACCOUNTS.map((acc) => (
+          <button
+            key={acc.email}
+            disabled={loading !== null}
+            onClick={async () => {
+              setLoading(acc.label);
+              try {
+                await onLogin(acc.email, acc.password, acc.label);
+              } finally {
+                setLoading(null);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+            style={{ background: acc.color }}
+          >
+            {loading === acc.label && (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            )}
+            {acc.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -50,6 +106,21 @@ function LoginForm() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Identifiants incorrects");
     }
+  };
+
+  const handleDevLogin = async (devEmail: string, devPassword: string) => {
+    setError(null);
+    const data = await authApi.login({
+      email: devEmail,
+      password: devPassword,
+    });
+    setAuthToken(data.tokens.accessToken);
+    localStorage.setItem("refresh_token", data.tokens.refreshToken);
+    useAuthStore.getState().setToken(data.tokens.accessToken);
+    useAuthStore.getState().setUser(data.user);
+    const role = mapBackendRole(data.user.role);
+    const dest = role === "child" ? "/student" : "/dashboard";
+    router.push(dest);
   };
 
   return (
@@ -304,6 +375,8 @@ function LoginForm() {
               )}
             </Button>
           </form>
+
+          <DevLoginBar onLogin={handleDevLogin} />
 
           <p className="text-center text-xs text-muted-foreground/50 mt-8">
             Protégé par la sécurité OumiSchool. &copy;{" "}
