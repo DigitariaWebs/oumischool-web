@@ -7,13 +7,26 @@ import {
 } from "../_components/common";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useStudentResources } from "@/hooks/student";
+import { useStudentGames, useStudentRecordResourceView } from "@/hooks/student";
 import { Gamepad2 } from "lucide-react";
-import Link from "next/link";
 
 export default function StudentExercisesPage() {
-  const resourcesQuery = useStudentResources();
-  const games = (resourcesQuery.data ?? []).filter((r) => r.isGame);
+  const resourcesQuery = useStudentGames();
+  const games = resourcesQuery.data ?? [];
+  const recordView = useStudentRecordResourceView();
+
+  const launchGame = (id: string) => {
+    if (!id) return;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || localStorage.getItem("token")
+        : null;
+    const url =
+      `/api/resources/${encodeURIComponent(id)}/download` +
+      (token ? `?token=${encodeURIComponent(token)}` : "");
+    window.open(url, "_blank", "noopener,noreferrer");
+    recordView.mutate(id);
+  };
 
   return (
     <div className="flex min-h-full flex-col">
@@ -78,10 +91,12 @@ export default function StudentExercisesPage() {
                     <p className="text-xs text-muted-foreground">
                       {resource.type}
                     </p>
-                    <Button asChild size="sm" className="mt-2">
-                      <Link href={`/student/resources?open=${resource.id}`}>
-                        Ouvrir le jeu
-                      </Link>
+                    <Button
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => launchGame(resource.id)}
+                    >
+                      Lancer
                     </Button>
                   </div>
                 ))}

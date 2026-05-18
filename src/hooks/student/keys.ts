@@ -6,6 +6,7 @@ export const studentKeys = {
   eventDetail: (id: string) => [...studentKeys.all, "event", id] as const,
   lessons: () => [...studentKeys.all, "lessons"] as const,
   resources: () => [...studentKeys.all, "resources"] as const,
+  games: () => [...studentKeys.all, "games"] as const,
   performance: (childId: string) =>
     [...studentKeys.all, "performance", childId] as const,
   activities: (childId: string, limit: number) =>

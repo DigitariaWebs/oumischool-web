@@ -76,6 +76,13 @@ export function useStudentResources() {
   });
 }
 
+export function useStudentGames() {
+  return useQuery({
+    queryKey: studentKeys.games(),
+    queryFn: studentApi.games,
+  });
+}
+
 export function useStudentDownloadResource() {
   return useMutation({
     mutationFn: (id: string) => studentApi.resourceDownload(id),

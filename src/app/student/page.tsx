@@ -44,6 +44,10 @@ function toScheduleItems(
   const sessionItems: StudentScheduleItem[] = sessions.map((session) => ({
     id: session.id,
     source: "session",
+    mode:
+      (session as unknown as { mode?: string }).mode === "in_person"
+        ? "in_person"
+        : "online",
     title: session.title,
     subject: session.subject?.name ?? session.subjectName ?? "Matière",
     subjectColor: session.subject?.color,
@@ -236,7 +240,10 @@ export default function StudentDashboardPage() {
                         variant="outline"
                         className="rounded-full border-border/70 text-[11px] font-medium text-muted-foreground"
                       >
-                        {getScheduleSourceLabel(nextLesson.source)}
+                        {getScheduleSourceLabel(
+                          nextLesson.source,
+                          nextLesson.mode,
+                        )}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
@@ -436,7 +443,10 @@ export default function StudentDashboardPage() {
                                   variant="outline"
                                   className="rounded-full border-border/70 text-[10px] font-medium text-muted-foreground"
                                 >
-                                  {getScheduleSourceLabel(item.source)}
+                                  {getScheduleSourceLabel(
+                                    item.source,
+                                    item.mode,
+                                  )}
                                 </Badge>
                                 <span
                                   className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeClasses(

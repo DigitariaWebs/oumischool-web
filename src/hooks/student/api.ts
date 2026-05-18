@@ -123,6 +123,13 @@ function pickEventLesson(raw: unknown): EventLesson | null {
 }
 
 function pickCalendarEvent(raw: Record<string, unknown>): StudentCalendarEvent {
+  const completed = Boolean(raw.completed);
+  const rawStatus = (raw.status as string | null | undefined) ?? null;
+  const status = completed
+    ? "COMPLETED"
+    : rawStatus && rawStatus.trim().length > 0
+      ? rawStatus
+      : "SCHEDULED";
   return {
     id: String(raw.id ?? ""),
     title: String(raw.title ?? "Événement"),
@@ -130,7 +137,7 @@ function pickCalendarEvent(raw: Record<string, unknown>): StudentCalendarEvent {
     subject: (raw.subject as StudentCalendarEvent["subject"]) ?? null,
     startTime: String(raw.startTime ?? raw.start ?? new Date().toISOString()),
     endTime: String(raw.endTime ?? raw.end ?? new Date().toISOString()),
-    status: (raw.status as string | null) ?? "SCHEDULED",
+    status,
     type: String(raw.type ?? "self_directed"),
     resources: asArray<Record<string, unknown>>(raw.resources).map(
       pickResource,
@@ -176,11 +183,11 @@ export const studentApi = {
   },
   markCalendarEventDone: (id: string) =>
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
-      status: "COMPLETED",
+      completed: true,
     }),
   startCalendarEvent: (id: string) =>
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
-      status: "IN_PROGRESS",
+      completed: false,
     }),
   updateCalendarEventProgress: (id: string, progress: number) =>
     api.put<{ success: boolean }>(`/calendar/events/${id}`, {
@@ -188,6 +195,10 @@ export const studentApi = {
     }),
   resources: async () => {
     const res = await api.get<unknown>("/resources");
+    return asArray<Record<string, unknown>>(res).map(pickResource);
+  },
+  games: async () => {
+    const res = await api.get<unknown>("/resources?isGame=true");
     return asArray<Record<string, unknown>>(res).map(pickResource);
   },
   resource: async (id: string) => {

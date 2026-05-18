@@ -5,6 +5,7 @@ export type StudentViewMode = "day" | "week";
 export interface StudentScheduleItem {
   id: string;
   source: "session" | "self_directed";
+  mode?: "online" | "in_person" | null;
   title: string;
   subject: string;
   subjectColor?: string | null;
@@ -127,10 +128,11 @@ export function computeBadges(input: {
 
 export function getScheduleSourceLabel(
   source: StudentScheduleItem["source"],
+  mode?: StudentScheduleItem["mode"],
 ): string {
-  return source === "self_directed"
-    ? "Session autonome"
-    : "Planifiée par parent";
+  if (source === "self_directed") return "Cours individuel";
+  if (mode === "in_person") return "Cours à domicile";
+  return "Cours en ligne";
 }
 
 /**

@@ -47,6 +47,7 @@ import {
   FileText,
   HardDrive,
   FileVideo,
+  Gamepad2,
   Globe,
   Loader2,
   MoreHorizontal,
@@ -594,6 +595,7 @@ const defaultFormState: {
   tags: string[];
   isPaid: boolean;
   price: string;
+  isGame: boolean;
 } = {
   title: "",
   description: "",
@@ -603,6 +605,7 @@ const defaultFormState: {
   tags: [],
   isPaid: false,
   price: "",
+  isGame: false,
 };
 
 function EmptyState({
@@ -687,6 +690,9 @@ export default function ResourcesPage() {
           String(Math.round(parseFloat(form.price) * 100)),
         );
       }
+    }
+    if (form.isGame) {
+      payload.append("isGame", "true");
     }
     payload.append("file", selectedFile);
 
@@ -960,38 +966,57 @@ export default function ResourcesPage() {
           {/* ── Type selector ── */}
           <div className="space-y-2">
             <Label>Type de ressource</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {(
                 [
                   {
+                    key: "document" as const,
                     type: "document" as const,
+                    isGame: false,
                     Icon: FileText,
                     label: "Document",
                     hint: "PDF, Word, Excel, PPT…",
                   },
                   {
+                    key: "video" as const,
                     type: "video" as const,
+                    isGame: false,
                     Icon: FileVideo,
                     label: "Vidéo",
                     hint: "MP4, WebM, MOV, AVI",
                   },
                   {
+                    key: "interactive" as const,
                     type: "interactive" as const,
+                    isGame: false,
                     Icon: Globe,
                     label: "Interactive",
                     hint: "Fichier HTML",
                   },
+                  {
+                    key: "minigame" as const,
+                    type: "interactive" as const,
+                    isGame: true,
+                    Icon: Gamepad2,
+                    label: "Mini-jeu",
+                    hint: "HTML · section Jeux",
+                  },
                 ] as const
-              ).map(({ type, Icon, label, hint }) => {
-                const selected = form.type === type;
+              ).map(({ key, type, isGame, Icon, label, hint }) => {
+                const selected =
+                  key === "minigame"
+                    ? form.type === "interactive" && form.isGame
+                    : form.type === type && !form.isGame;
                 const c = typeColors[type];
                 return (
                   <button
-                    key={type}
+                    key={key}
                     type="button"
                     onClick={() => {
-                      if (form.type !== type) {
-                        setForm((f) => ({ ...f, type }));
+                      const changed =
+                        form.type !== type || form.isGame !== isGame;
+                      if (changed) {
+                        setForm((f) => ({ ...f, type, isGame }));
                         clearFile();
                       }
                     }}
