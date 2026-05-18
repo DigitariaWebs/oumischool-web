@@ -66,6 +66,11 @@ export function useStudentChildId() {
   return profile.data?.child?.id ?? null;
 }
 
+export function useStudentGrade() {
+  const profile = useStudentProfile();
+  return profile.data?.child?.grade ?? null;
+}
+
 export function useVerifyEmail() {
   return useMutation({
     mutationFn: (token: string) => authApi.verifyEmail(token),

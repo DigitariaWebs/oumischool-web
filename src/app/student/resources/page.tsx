@@ -30,18 +30,27 @@ import {
   useStudentRecordResourceView,
   useStudentResources,
 } from "@/hooks/student";
+import { useStudentGrade } from "@/hooks/auth";
 import { getResourceTypeLabel } from "@/lib/student-utils";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function StudentResourcesPage() {
   const resourcesQuery = useStudentResources();
   const recordView = useStudentRecordResourceView();
+  const studentGrade = useStudentGrade();
 
-  const [grade, setGrade] = useState("all");
+  const [grade, setGrade] = useState<string>(studentGrade ?? "all");
   const [subject, setSubject] = useState("all");
   const [type, setType] = useState("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // When student profile loads (async), pin grade filter to their grade
+  useEffect(() => {
+    if (studentGrade && grade === "all") {
+      setGrade(studentGrade);
+    }
+  }, [studentGrade, grade]);
 
   const entitled = useMemo(
     () =>
@@ -125,19 +134,26 @@ export default function StudentResourcesPage() {
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Rechercher une ressource"
             />
-            <Select value={grade} onValueChange={setGrade}>
-              <SelectTrigger aria-label="Filtrer par niveau">
-                <SelectValue placeholder="Niveau" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les niveaux</SelectItem>
-                {grades.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {studentGrade ? (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Niveau :</span>
+                <span>{studentGrade}</span>
+              </div>
+            ) : (
+              <Select value={grade} onValueChange={setGrade}>
+                <SelectTrigger aria-label="Filtrer par niveau">
+                  <SelectValue placeholder="Niveau" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les niveaux</SelectItem>
+                  {grades.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={subject} onValueChange={setSubject}>
               <SelectTrigger aria-label="Filtrer par matière">
                 <SelectValue placeholder="Matière" />
@@ -167,7 +183,7 @@ export default function StudentResourcesPage() {
             <Button
               variant="outline"
               onClick={() => {
-                setGrade("all");
+                setGrade(studentGrade ?? "all");
                 setSubject("all");
                 setType("all");
                 setSearch("");

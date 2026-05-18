@@ -1,3 +1,0 @@
-bun lint
-bun format:check
-bun run build

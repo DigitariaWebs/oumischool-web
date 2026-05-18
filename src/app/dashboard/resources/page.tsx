@@ -586,10 +586,24 @@ const filters = [
   },
 ];
 
+const GRADE_OPTIONS = [
+  "Maternelle",
+  "CP",
+  "CE1",
+  "CE2",
+  "CM1",
+  "CM2",
+  "6ème",
+  "5ème",
+  "4ème",
+  "3ème",
+] as const;
+
 const defaultFormState: {
   title: string;
   description: string;
   subject: string;
+  grade: string;
   type: ResourceType;
   status: ResourceStatus;
   tags: string[];
@@ -600,6 +614,7 @@ const defaultFormState: {
   title: "",
   description: "",
   subject: "",
+  grade: "",
   type: "document",
   status: "draft",
   tags: [],
@@ -681,6 +696,7 @@ export default function ResourcesPage() {
     payload.append("type", form.type);
     payload.append("status", form.status.toUpperCase());
     if (form.description) payload.append("description", form.description);
+    if (form.grade) payload.append("grade", form.grade);
     if (form.tags.length > 0) payload.append("tags", JSON.stringify(form.tags));
     if (form.isPaid) {
       payload.append("isPaid", "true");
@@ -1233,7 +1249,7 @@ export default function ResourcesPage() {
             />
           </div>
 
-          {/* ── Subject + Status ── */}
+          {/* ── Subject + Grade ── */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Matière</Label>
@@ -1254,22 +1270,42 @@ export default function ResourcesPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Statut</Label>
+              <Label>Niveau / Classe</Label>
               <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as Resource["status"] }))
-                }
+                value={form.grade || undefined}
+                onValueChange={(v) => setForm((f) => ({ ...f, grade: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Statut" />
+                  <SelectValue placeholder="Sélectionner un niveau" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="published">Publiée</SelectItem>
-                  <SelectItem value="draft">Brouillon</SelectItem>
+                  {GRADE_OPTIONS.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* ── Status ── */}
+          <div className="space-y-1.5">
+            <Label>Statut</Label>
+            <Select
+              value={form.status}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, status: v as Resource["status"] }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="published">Publiée</SelectItem>
+                <SelectItem value="draft">Brouillon</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* ── Tags ── */}

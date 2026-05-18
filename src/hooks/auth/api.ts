@@ -31,6 +31,7 @@ export interface AuthProfile {
   child?: {
     id: string;
     name?: string;
+    grade?: string | null;
   } | null;
 }
 
