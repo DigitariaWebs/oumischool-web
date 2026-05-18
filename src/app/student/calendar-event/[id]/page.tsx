@@ -20,6 +20,7 @@ import {
   useMarkStudentCalendarEventDone,
   useStartStudentCalendarEvent,
   useStudentCalendarEventDetail,
+  useStudentRecordResourceView,
 } from "@/hooks/student";
 import { StudentResource, studentApi } from "@/hooks/student/api";
 import {
@@ -78,6 +79,7 @@ export default function StudentCalendarEventDetailPage() {
   const query = useStudentCalendarEventDetail(id);
   const startMutation = useStartStudentCalendarEvent(id);
   const markDone = useMarkStudentCalendarEventDone(id);
+  const recordView = useStudentRecordResourceView();
 
   const [selectedResource, setSelectedResource] =
     useState<StudentResource | null>(null);
@@ -113,6 +115,19 @@ export default function StudentCalendarEventDetailPage() {
       const next = new Set(prev);
       next.add(resourceId);
       saveViewed(id, next);
+
+      // Auto-complete event once every resource has been opened
+      if (
+        totalResources > 0 &&
+        next.size >= totalResources &&
+        !isCompleted &&
+        !markDone.isPending
+      ) {
+        markDone
+          .mutateAsync()
+          .then(() => query.refetch())
+          .catch(() => undefined);
+      }
       return next;
     });
   };
@@ -120,6 +135,7 @@ export default function StudentCalendarEventDetailPage() {
   const openResource = (resource: StudentResource) => {
     setSelectedResource(resource);
     markResourceViewed(resource.id);
+    recordView.mutate(resource.id);
   };
 
   const handleStart = async () => {
@@ -323,6 +339,7 @@ export default function StudentCalendarEventDetailPage() {
                                     material.resourceId,
                                   );
                                   setSelectedResource(resource);
+                                  recordView.mutate(material.resourceId);
                                 } catch {
                                   /* ignore */
                                 }
