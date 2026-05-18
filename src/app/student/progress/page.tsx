@@ -30,10 +30,23 @@ export default function StudentProgressPage() {
   const performance = performanceQuery.data;
   const activities = activitiesQuery.data ?? [];
 
+  const gamesPlayed = activities.filter(
+    (a) => (a.activityType ?? a.type) === "game",
+  ).length;
+  const lessonsCompleted = activities.filter(
+    (a) => (a.activityType ?? a.type) === "lesson",
+  ).length;
+  const sessionCount = performance?.sessionCount ?? 0;
+  const streakDays = performance?.learningStreakDays ?? 0;
+
   const badges = computeBadges({
     attendanceRate: performance?.attendanceRate ?? 0,
     avgScore: performance?.avgScore ?? 0,
     activitiesCount: activities.length,
+    sessionCount,
+    lessonsCompleted,
+    gamesPlayed,
+    streakDays,
   });
 
   return (
@@ -100,10 +113,35 @@ export default function StudentProgressPage() {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div
                 className={
-                  badges.attendance70 ? "text-primary" : "text-muted-foreground"
+                  badges.sessionStarter
+                    ? "text-primary"
+                    : "text-muted-foreground"
                 }
               >
-                Présence ≥ 70%
+                Séance suivie ({sessionCount})
+              </div>
+              <div
+                className={
+                  badges.lessonScholar
+                    ? "text-primary"
+                    : "text-muted-foreground"
+                }
+              >
+                Leçons ≥ 5 ({lessonsCompleted})
+              </div>
+              <div
+                className={
+                  badges.gamePlayer ? "text-primary" : "text-muted-foreground"
+                }
+              >
+                Jeux ≥ 3 ({gamesPlayed})
+              </div>
+              <div
+                className={
+                  badges.streak3 ? "text-primary" : "text-muted-foreground"
+                }
+              >
+                Série {streakDays}j d&apos;affilée
               </div>
               <div
                 className={
@@ -117,14 +155,7 @@ export default function StudentProgressPage() {
                   badges.score85 ? "text-primary" : "text-muted-foreground"
                 }
               >
-                Score ≥ 85%
-              </div>
-              <div
-                className={
-                  badges.activities5 ? "text-primary" : "text-muted-foreground"
-                }
-              >
-                Activités ≥ 5
+                Champion 85%+
               </div>
             </div>
           </CardContent>

@@ -59,12 +59,16 @@ export interface StudentResource {
 export interface StudentPerformance {
   avgScore: number;
   attendanceRate: number;
+  studyTimeMinutes?: number;
+  sessionCount?: number;
+  learningStreakDays?: number;
   subjectProgress?: { subject: string; score: number }[];
 }
 
 export interface StudentActivity {
   id: string;
   type: string;
+  activityType?: string;
   subject?: string;
   createdAt: string;
   score?: number;
@@ -214,10 +218,34 @@ export const studentApi = {
     api.post<{ ok: boolean }>(`/resources/${id}/record-view`, {}),
   performance: (childId: string) =>
     api.get<StudentPerformance>(`/children/${childId}/performance`),
-  activities: async (childId: string, limit = 10) =>
-    api.get<StudentActivity[]>(
+  activities: async (childId: string, limit = 10) => {
+    const raw = await api.get<unknown>(
       `/children/${childId}/activities?limit=${limit}`,
-    ),
+    );
+    return asArray<Record<string, unknown>>(raw).map(
+      (r): StudentActivity => ({
+        id: String(r.id ?? ""),
+        type: String(r.activityType ?? r.type ?? "activity"),
+        activityType: r.activityType
+          ? String(r.activityType)
+          : r.type
+            ? String(r.type)
+            : undefined,
+        subject:
+          typeof r.subject === "object" && r.subject !== null
+            ? String((r.subject as { name?: unknown }).name ?? "")
+            : typeof r.subject === "string"
+              ? r.subject
+              : undefined,
+        createdAt: String(
+          r.recordedAt ?? r.createdAt ?? new Date().toISOString(),
+        ),
+        score: typeof r.score === "number" ? r.score : undefined,
+        title: typeof r.title === "string" ? r.title : undefined,
+        status: typeof r.status === "string" ? r.status : undefined,
+      }),
+    );
+  },
   recommendations: (childId: string) =>
     api.get<StudentRecommendation[]>(`/children/${childId}/recommendations`),
   createActivity: (childId: string, body: Record<string, unknown>) =>

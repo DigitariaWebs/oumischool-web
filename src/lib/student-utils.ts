@@ -20,6 +20,10 @@ export interface StudentBadgeSet {
   score60: boolean;
   score85: boolean;
   activities5: boolean;
+  sessionStarter: boolean;
+  lessonScholar: boolean;
+  gamePlayer: boolean;
+  streak3: boolean;
 }
 
 export function computeDurationMinutes(
@@ -117,12 +121,20 @@ export function computeBadges(input: {
   attendanceRate: number;
   avgScore: number;
   activitiesCount: number;
+  sessionCount?: number;
+  lessonsCompleted?: number;
+  gamesPlayed?: number;
+  streakDays?: number;
 }): StudentBadgeSet {
   return {
     attendance70: input.attendanceRate >= 70,
     score60: input.avgScore >= 60,
     score85: input.avgScore >= 85,
     activities5: input.activitiesCount >= 5,
+    sessionStarter: (input.sessionCount ?? 0) >= 1,
+    lessonScholar: (input.lessonsCompleted ?? 0) >= 5,
+    gamePlayer: (input.gamesPlayed ?? 0) >= 3,
+    streak3: (input.streakDays ?? 0) >= 3,
   };
 }
 
